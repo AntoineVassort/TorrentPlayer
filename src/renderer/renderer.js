@@ -13,11 +13,12 @@ let searchFilters = { category: 'tout', quality: 'tout' };
 
 async function init() {
   [settings, players] = await Promise.all([window.api.getSettings(), window.api.detectPlayers()]);
+  applyTranslations(settings.language || 'en');
   window.api.onState(data => { torrents = data; renderList(); });
   window.api.onClipboardMagnet(magnet => showClipboardBanner(magnet));
   window.api.onUpdateAvailable(({ version, url }) => {
     let releaseUrl = url;
-    document.getElementById('update-text').textContent = `Nouvelle version disponible : ${version}`;
+    document.getElementById('update-text').textContent = t('update.available', { version });
     document.getElementById('update-download-btn').onclick = () => window.api.openRelease(releaseUrl);
     document.getElementById('update-dismiss-btn').onclick = () => document.getElementById('update-banner').classList.add('hidden');
     document.getElementById('update-banner').classList.remove('hidden');
@@ -102,6 +103,10 @@ function bindUI() {
     }
   });
 
+  document.getElementById('language-select').addEventListener('change', e => {
+    applyTranslations(e.target.value);
+  });
+
   document.getElementById('history-btn').addEventListener('click', openHistory);
   document.getElementById('history-back-btn').addEventListener('click', closeHistory);
 
@@ -144,7 +149,7 @@ async function handleSearch() {
 
   const status = document.createElement('div');
   status.className = 'search-status';
-  status.textContent = 'Recherche en cours...';
+  status.textContent = t('status.searching');
   resultsEl.appendChild(status);
 
   const btn = document.getElementById('search-btn');
@@ -157,7 +162,7 @@ async function handleSearch() {
     if (!results.length) {
       const el = document.createElement('div');
       el.className = 'search-status';
-      el.textContent = 'Aucun résultat';
+      el.textContent = t('status.noResults');
       resultsEl.appendChild(el);
     } else {
       for (const r of results) resultsEl.appendChild(renderResult(r));
@@ -166,11 +171,11 @@ async function handleSearch() {
     resultsEl.textContent = '';
     const el = document.createElement('div');
     el.className = 'search-status';
-    el.textContent = 'Erreur réseau, réessayez';
+    el.textContent = t('status.networkError');
     resultsEl.appendChild(el);
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Rechercher';
+    btn.textContent = t('btn.search');
   }
 }
 
@@ -227,7 +232,7 @@ async function handleAdd() {
   const val = input.value.trim();
   if (!val) return;
   if (!val.startsWith('magnet:') && !val.endsWith('.torrent')) {
-    toast('Lien magnet invalide (doit commencer par magnet:)', true);
+    toast(t('toast.invalidMagnet'), true);
     return;
   }
   input.value = '';
@@ -237,7 +242,7 @@ async function handleAdd() {
 async function doAdd(source) {
   try {
     const r = await window.api.addTorrent(source);
-    toast(`Ajouté : ${r.name}`);
+    toast(t('toast.added', { name: r.name }));
     if (r.videoFiles?.length > 1) openFilePicker(r.id, r.videoFiles);
   } catch (err) {
     toast(err.message, true);
@@ -291,8 +296,9 @@ function fmtETA(ms) {
 }
 
 function fmtDate(iso) {
+  const locale = getLang() === 'fr' ? 'fr-FR' : 'en-US';
   try {
-    return new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+    return new Date(iso).toLocaleDateString(locale, { day: '2-digit', month: 'short', year: 'numeric' });
   } catch { return iso; }
 }
 
@@ -314,7 +320,7 @@ function createCard(t) {
     <img class="card-poster hidden" alt="">
     <div class="card-body">
       <div class="card-top">
-        <span class="drag-handle" title="Réordonner">⠿</span>
+        <span class="drag-handle" title="${t('drag.handle')}">⠿</span>
         <span class="card-name" title="${t.name}">${t.name}</span>
         <span class="queue-badge hidden"></span>
         <span class="card-size">${fmtSize(t.size)}</span>
@@ -331,9 +337,9 @@ function createCard(t) {
       </div>
       <div class="playback-bar hidden"></div>
       <div class="card-actions">
-        <button class="btn-files hidden" title="Choisir un fichier">📂</button>
-        <button class="btn-play">▶ Lire</button>
-        <button class="btn-local hidden">📁 Lire en local</button>
+        <button class="btn-files hidden" title="${t('btn.chooseFile')}">📂</button>
+        <button class="btn-play">${t('card.play')}</button>
+        <button class="btn-local hidden">${t('card.playLocal')}</button>
         <button class="btn-cast hidden">📺</button>
         <button class="btn-seed hidden">⏸ Seeding</button>
         <button class="btn-remove">✕</button>
@@ -407,7 +413,7 @@ function updateCard(card, t) {
   const pct = (t.progress * 100).toFixed(1);
   card.querySelector('.progress-fill').style.width = `${pct}%`;
   card.querySelector('.progress-fill').classList.toggle('done', t.done);
-  card.querySelector('.pct').textContent = t.done ? '✓ Terminé' : `${pct}%`;
+  card.querySelector('.pct').textContent = t.done ? t('card.done') : `${pct}%`;
   card.querySelector('.downloaded').textContent = t.done ? '' : fmtSize(t.downloaded);
   card.querySelector('.eta').textContent = t.done ? '' : fmtETA(t.timeRemaining);
   card.querySelector('.dl').textContent = t.done ? '' : `↓ ${fmt(t.downloadSpeed)}`;
@@ -446,18 +452,18 @@ function updateCard(card, t) {
   const seedBtn = card.querySelector('.btn-seed');
   seedBtn.classList.toggle('hidden', !t.done);
   if (t.done) {
-    seedBtn.textContent = t.paused ? '▶ Seeder' : '⏸ Seeding';
+    seedBtn.textContent = t.paused ? t('card.seeder') : t('card.seeding');
     seedBtn.classList.toggle('active', !t.paused);
   }
 
   // Playback / casting bar
   const playbackBar = card.querySelector('.playback-bar');
   if (t.casting) {
-    playbackBar.textContent = `📺 Cast en cours — ${t.casting}`;
+    playbackBar.textContent = t('cast.inProgress', { name: t.casting });
     playbackBar.classList.remove('hidden');
   } else if (t.playback) {
     const dur = t.playback.duration > 0 ? ` / ${fmtTime(t.playback.duration)}` : '';
-    playbackBar.textContent = `▶ En lecture — ${fmtTime(t.playback.pos)}${dur}`;
+    playbackBar.textContent = t('card.playing', { pos: fmtTime(t.playback.pos), dur });
     playbackBar.classList.remove('hidden');
   } else {
     playbackBar.classList.add('hidden');
@@ -465,13 +471,13 @@ function updateCard(card, t) {
 
   const playBtn = card.querySelector('.btn-play');
   if (!t.ready) {
-    playBtn.textContent = '⟳ Connexion...';
+    playBtn.textContent = t('card.buffering');
     playBtn.classList.add('buffering');
   } else if (t.resumePos > 5) {
     playBtn.textContent = `↩ ${fmtTime(t.resumePos)}`;
     playBtn.classList.remove('buffering');
   } else {
-    playBtn.textContent = '▶ Lire';
+    playBtn.textContent = t('card.play');
     playBtn.classList.remove('buffering');
   }
 }
@@ -514,10 +520,12 @@ async function openCastPicker(id) {
   deviceList.textContent = '';
   modal.classList.remove('hidden');
 
+  scanning.textContent = t('cast.scanning');
   try {
     const devices = await window.api.discoverDevices();
     scanning.classList.add('hidden');
     if (!devices.length) {
+      castEmpty.textContent = t('cast.noDevices');
       castEmpty.classList.remove('hidden');
     } else {
       for (const d of devices) {
@@ -528,7 +536,7 @@ async function openCastPicker(id) {
           closeCastModal();
           try {
             await window.api.castToDevice(castTargetId, d.host);
-            toast(`Cast démarré sur ${d.name}`);
+            toast(t('cast.started', { name: d.name }));
           } catch (err) {
             toast(err.message, true);
           }
@@ -539,7 +547,7 @@ async function openCastPicker(id) {
     }
   } catch (err) {
     scanning.classList.add('hidden');
-    castEmpty.textContent = `Erreur : ${err.message}`;
+    castEmpty.textContent = t('cast.error', { msg: err.message });
     castEmpty.classList.remove('hidden');
   }
 }
@@ -562,7 +570,7 @@ function openFilePicker(torrentId, files) {
     item.addEventListener('click', async () => {
       try {
         await window.api.changeFile(torrentId, f.index);
-        toast(`Fichier : ${f.name}`);
+        toast(t('toast.file', { name: f.name }));
       } catch (err) { toast(err.message, true); }
       closeFilePicker();
     });
@@ -625,7 +633,7 @@ async function renderHistory() {
     const yearLine    = item.year ? `<div class="lib-info-year">${item.year}</div>` : '';
 
     const actionBtn = item.type === 'active'
-      ? `<button class="btn-lib-play">▶ Lire</button>`
+      ? `<button class="btn-lib-play">${t('card.play')}</button>`
       : (item.magnet ? `<button class="btn-lib-redownload">↩</button>` : '');
 
     card.innerHTML = `
@@ -660,7 +668,7 @@ async function renderHistory() {
         e.stopPropagation();
         doAdd(item.magnet);
         closeHistory();
-        toast(`Ajouté : ${item.name}`);
+        toast(t('toast.added', { name: item.name }));
       });
       card.querySelector('.btn-lib-remove').addEventListener('click', async e => {
         e.stopPropagation();
@@ -706,7 +714,7 @@ async function renderHistory() {
 function showClipboardBanner(magnet) {
   pendingClipboardMagnet = magnet;
   const short = magnet.slice(0, 60) + '...';
-  document.getElementById('clipboard-text').textContent = `Magnet détecté : ${short}`;
+  document.getElementById('clipboard-text').textContent = t('clipboard.detected', { short });
   document.getElementById('clipboard-banner').classList.remove('hidden');
 }
 
@@ -732,8 +740,9 @@ function populateSettings() {
   const select = document.getElementById('player-select');
   select.innerHTML = '';
   for (const p of players) select.add(new Option(`${p.name}  —  ${p.path}`, p.name));
-  if (!players.length) { const o = new Option('Aucun player détecté', ''); o.disabled = true; select.add(o); }
+  if (!players.length) { const o = new Option(t('player.none'), ''); o.disabled = true; select.add(o); }
 
+  document.getElementById('language-select').value = settings.language || 'en';
   document.getElementById('download-dir').value = settings.downloadDir || '';
   document.getElementById('delete-after-play').checked = !!settings.deleteAfterPlay;
   document.getElementById('max-download').value = settings.maxDownload || '';
@@ -747,7 +756,7 @@ function populateSettings() {
       document.getElementById('player-path').value = match.path;
       document.getElementById('player-args').value = (settings.player.args || []).join(' ');
     } else {
-      if (!select.querySelector('option[value="__custom__"]')) select.add(new Option('Personnalisé', '__custom__'));
+      if (!select.querySelector('option[value="__custom__"]')) select.add(new Option(t('player.custom'), '__custom__'));
       select.value = '__custom__';
       document.getElementById('player-path').value = settings.player.path;
       document.getElementById('player-args').value = (settings.player.args || []).join(' ');
@@ -762,7 +771,7 @@ function populateSettings() {
 async function rescan() {
   players = await window.api.detectPlayers();
   populateSettings();
-  toast(`${players.length} player(s) détecté(s)`);
+  toast(t('player.detected', { count: players.length }));
 }
 
 async function browsePlayer() {
@@ -771,25 +780,25 @@ async function browsePlayer() {
   document.getElementById('player-path').value = p;
   document.getElementById('player-args').value = '';
   const select = document.getElementById('player-select');
-  if (!select.querySelector('option[value="__custom__"]')) select.add(new Option('Personnalisé', '__custom__'));
+  if (!select.querySelector('option[value="__custom__"]')) select.add(new Option(t('player.custom'), '__custom__'));
   select.value = '__custom__';
 }
 
 async function testTmdb() {
   const key = document.getElementById('tmdb-key').value.trim();
-  if (!key) { toast('Entrez une clé TMDB d\'abord'); return; }
+  if (!key) { toast(t('toast.tmdbKeyMissing')); return; }
   const btn = document.getElementById('btn-test-tmdb');
   btn.disabled = true;
   btn.textContent = '…';
   try {
     const result = await window.api.testTmdb(key);
-    if (result.ok) toast(`✓ TMDB OK — ${result.title} (${result.year})${result.poster ? ' + poster' : ' sans poster'}`);
-    else toast('✗ TMDB : clé invalide ou aucun résultat');
+    if (result.ok) toast(t('tmdb.ok', { title: result.title, year: result.year, poster: result.poster ? t('tmdb.withPoster') : '' }));
+    else toast(t('tmdb.invalid'));
   } catch {
-    toast('✗ TMDB : erreur réseau');
+    toast(t('tmdb.networkError'));
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Tester';
+    btn.textContent = t('btn.test');
   }
 }
 
@@ -802,6 +811,7 @@ async function saveSettings() {
   const maxDl = parseInt(document.getElementById('max-download').value) || 0;
   const maxUl = parseInt(document.getElementById('max-upload').value) || 0;
   const tmdbApiKey = document.getElementById('tmdb-key').value.trim();
+  const language = document.getElementById('language-select').value;
 
   settings = {
     ...settings,
@@ -811,9 +821,10 @@ async function saveSettings() {
     maxDownload: maxDl || null,
     maxUpload: maxUl || null,
     tmdbApiKey,
+    language,
   };
   await window.api.saveSettings(settings);
-  toast('Paramètres enregistrés');
+  toast(t('toast.settingsSaved'));
   closeSettings();
 }
 

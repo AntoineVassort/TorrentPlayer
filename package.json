@@ -1,13 +1,13 @@
 {
   "name": "torrent-player",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Stream torrents via an external player",
   "type": "module",
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
     "cli": "node src/index.js",
-    "dist": "electron-packager . TorrentPlayer --platform=win32 --arch=x64 --out=dist --overwrite --ignore=^/dist --no-asar && node scripts/postbuild.mjs"
+    "dist": "electron-packager . TorrentPlayer --platform=win32 --arch=x64 --out=dist --overwrite --ignore=^/dist --ignore=^/\\.claude --ignore=^/\\.github --ignore=^/CLAUDE\\.md --ignore=^/README\\.md --ignore=^/LICENSE --ignore=^/\\.gitignore --ignore=^/\\.gitattributes --ignore=^/tasks --no-asar && node scripts/postbuild.mjs"
   },
   "dependencies": {
     "chromecasts": "^1.10.2",

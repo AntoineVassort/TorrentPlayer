@@ -1,0 +1,198 @@
+'use strict';
+
+const TRANSLATIONS = {
+  en: {
+    'tab.magnet': '🔗 Magnet',
+    'tab.search': '🔍 Search',
+    'magnet.placeholder': 'Paste a magnet link or drag a .torrent...',
+    'btn.add': 'Add',
+    'search.placeholder': 'Movie, series name...',
+    'btn.search': 'Search',
+    'filter.all': 'All',
+    'filter.movies': 'Movies',
+    'filter.series': 'Series',
+    'filter.anyQuality': 'Any quality',
+    'btn.download': 'Download',
+    'update.available': 'New version available: {version}',
+    'banner.noPlayer': 'No video player detected. Install <strong>VLC</strong> or <strong>mpv</strong>, then configure it in settings.',
+    'btn.openSettings': '⚙ Settings',
+    'empty.noTorrent': 'No active torrents',
+    'empty.hint': 'Search for a title or paste a magnet link',
+    'history.title': 'Library',
+    'btn.back': '← Back',
+    'history.empty': 'Library empty',
+    'history.emptyHint': 'Completed torrents will appear here',
+    'settings.title': 'Settings',
+    'settings.general': 'General',
+    'settings.player': 'Video player',
+    'settings.downloads': 'Downloads',
+    'settings.metadata': 'Metadata',
+    'label.language': 'Language',
+    'btn.rescan': '🔄 Re-scan',
+    'btn.browse': 'Browse...',
+    'btn.choose': 'Choose...',
+    'label.args': 'Arguments',
+    'player.placeholder': 'Player path...',
+    'args.placeholder': 'e.g. --cache=yes --force-window',
+    'dir.placeholder': 'Download folder...',
+    'label.deleteAfterPlay': 'Delete files when the app closes',
+    'label.maxDl': 'Max DL',
+    'label.maxUl': 'Max UL',
+    'limit.placeholder': 'unlimited',
+    'label.tmdbKey': 'TMDB key',
+    'tmdb.placeholder': 'API Read Access Token (themoviedb.org)',
+    'btn.test': 'Test',
+    'settings.tmdbHint': 'Free key at <span class="settings-link">themoviedb.org → Settings → API</span>',
+    'btn.save': 'Save',
+    'modal.chooseFile': 'Choose a file',
+    'modal.castTo': '📺 Cast to...',
+    'win.minimize': 'Minimize',
+    'win.maximize': 'Maximize',
+    'win.close': 'Close',
+    'title.library': 'Library',
+    'title.settings': 'Settings',
+    'status.searching': 'Searching...',
+    'status.noResults': 'No results',
+    'status.networkError': 'Network error, try again',
+    'toast.invalidMagnet': 'Invalid magnet link (must start with magnet:)',
+    'toast.added': 'Added: {name}',
+    'card.done': '✓ Done',
+    'card.buffering': '⟳ Connecting...',
+    'card.play': '▶ Play',
+    'card.playLocal': '📁 Play locally',
+    'card.seeder': '▶ Seed',
+    'card.seeding': '⏸ Seeding',
+    'cast.scanning': '🔍 Scanning for devices (4s)...',
+    'cast.noDevices': 'No Chromecast device detected on the network',
+    'cast.error': 'Error: {msg}',
+    'cast.started': 'Cast started on {name}',
+    'cast.inProgress': '📺 Casting — {name}',
+    'card.playing': '▶ Playing — {pos}{dur}',
+    'clipboard.detected': 'Magnet detected: {short}',
+    'player.none': 'No player detected',
+    'player.custom': 'Custom',
+    'player.detected': '{count} player(s) detected',
+    'toast.tmdbKeyMissing': 'Enter a TMDB key first',
+    'tmdb.ok': '✓ TMDB OK — {title} ({year}){poster}',
+    'tmdb.withPoster': ' + poster',
+    'tmdb.invalid': '✗ TMDB: invalid key or no results',
+    'tmdb.networkError': '✗ TMDB: network error',
+    'toast.settingsSaved': 'Settings saved',
+    'toast.file': 'File: {name}',
+    'drag.handle': 'Reorder',
+    'btn.chooseFile': 'Choose a file',
+  },
+  fr: {
+    'tab.magnet': '🔗 Magnet',
+    'tab.search': '🔍 Recherche',
+    'magnet.placeholder': 'Coller un lien magnet ou glisser un .torrent...',
+    'btn.add': 'Ajouter',
+    'search.placeholder': 'Nom du film, série...',
+    'btn.search': 'Rechercher',
+    'filter.all': 'Tout',
+    'filter.movies': 'Films',
+    'filter.series': 'Séries',
+    'filter.anyQuality': 'Toute qualité',
+    'btn.download': 'Télécharger',
+    'update.available': 'Nouvelle version disponible : {version}',
+    'banner.noPlayer': 'Aucun player vidéo détecté. Installez <strong>VLC</strong> ou <strong>mpv</strong>, puis configurez-le dans les paramètres.',
+    'btn.openSettings': '⚙ Paramètres',
+    'empty.noTorrent': 'Aucun torrent actif',
+    'empty.hint': 'Recherchez un titre ou collez un lien magnet',
+    'history.title': 'Bibliothèque',
+    'btn.back': '← Retour',
+    'history.empty': 'Bibliothèque vide',
+    'history.emptyHint': 'Les torrents terminés apparaîtront ici',
+    'settings.title': 'Paramètres',
+    'settings.general': 'Général',
+    'settings.player': 'Player vidéo',
+    'settings.downloads': 'Téléchargements',
+    'settings.metadata': 'Métadonnées',
+    'label.language': 'Langue',
+    'btn.rescan': '🔄 Re-scanner',
+    'btn.browse': 'Parcourir...',
+    'btn.choose': 'Choisir...',
+    'label.args': 'Arguments',
+    'player.placeholder': 'Chemin du player...',
+    'args.placeholder': 'ex: --cache=yes --force-window',
+    'dir.placeholder': 'Dossier de téléchargement...',
+    'label.deleteAfterPlay': "Supprimer les fichiers à la fermeture de l'application",
+    'label.maxDl': 'Max DL',
+    'label.maxUl': 'Max UL',
+    'limit.placeholder': 'illimité',
+    'label.tmdbKey': 'Clé TMDB',
+    'tmdb.placeholder': 'API Read Access Token (themoviedb.org)',
+    'btn.test': 'Tester',
+    'settings.tmdbHint': 'Clé gratuite sur <span class="settings-link">themoviedb.org → Settings → API</span>',
+    'btn.save': 'Enregistrer',
+    'modal.chooseFile': 'Choisir un fichier',
+    'modal.castTo': '📺 Diffuser sur...',
+    'win.minimize': 'Réduire',
+    'win.maximize': 'Agrandir',
+    'win.close': 'Fermer',
+    'title.library': 'Bibliothèque',
+    'title.settings': 'Paramètres',
+    'status.searching': 'Recherche en cours...',
+    'status.noResults': 'Aucun résultat',
+    'status.networkError': 'Erreur réseau, réessayez',
+    'toast.invalidMagnet': 'Lien magnet invalide (doit commencer par magnet:)',
+    'toast.added': 'Ajouté : {name}',
+    'card.done': '✓ Terminé',
+    'card.buffering': '⟳ Connexion...',
+    'card.play': '▶ Lire',
+    'card.playLocal': '📁 Lire en local',
+    'card.seeder': '▶ Seeder',
+    'card.seeding': '⏸ Seeding',
+    'cast.scanning': '🔍 Recherche des appareils (4s)...',
+    'cast.noDevices': 'Aucun appareil Chromecast détecté sur le réseau',
+    'cast.error': 'Erreur : {msg}',
+    'cast.started': 'Cast démarré sur {name}',
+    'cast.inProgress': '📺 Cast en cours — {name}',
+    'card.playing': '▶ En lecture — {pos}{dur}',
+    'clipboard.detected': 'Magnet détecté : {short}',
+    'player.none': 'Aucun player détecté',
+    'player.custom': 'Personnalisé',
+    'player.detected': '{count} player(s) détecté(s)',
+    'toast.tmdbKeyMissing': "Entrez une clé TMDB d'abord",
+    'tmdb.ok': '✓ TMDB OK — {title} ({year}){poster}',
+    'tmdb.withPoster': ' + poster',
+    'tmdb.invalid': '✗ TMDB : clé invalide ou aucun résultat',
+    'tmdb.networkError': '✗ TMDB : erreur réseau',
+    'toast.settingsSaved': 'Paramètres enregistrés',
+    'toast.file': 'Fichier : {name}',
+    'drag.handle': 'Réordonner',
+    'btn.chooseFile': 'Choisir un fichier',
+  },
+};
+
+let _lang = 'en';
+
+function t(key, vars) {
+  const dict = TRANSLATIONS[_lang] || TRANSLATIONS.en;
+  let str = dict[key] !== undefined ? dict[key] : (TRANSLATIONS.en[key] !== undefined ? TRANSLATIONS.en[key] : key);
+  if (vars) {
+    for (const [k, v] of Object.entries(vars)) {
+      str = str.replace(`{${k}}`, v ?? '');
+    }
+  }
+  return str;
+}
+
+function getLang() { return _lang; }
+
+function applyTranslations(lang) {
+  _lang = lang === 'fr' ? 'fr' : 'en';
+  document.documentElement.lang = _lang;
+  for (const el of document.querySelectorAll('[data-i18n]')) {
+    el.textContent = t(el.dataset.i18n);
+  }
+  for (const el of document.querySelectorAll('[data-i18n-html]')) {
+    el.innerHTML = t(el.dataset.i18nHtml);
+  }
+  for (const el of document.querySelectorAll('[data-i18n-placeholder]')) {
+    el.placeholder = t(el.dataset.i18nPlaceholder);
+  }
+  for (const el of document.querySelectorAll('[data-i18n-title]')) {
+    el.title = t(el.dataset.i18nTitle);
+  }
+}

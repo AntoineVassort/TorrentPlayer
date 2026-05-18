@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:">
@@ -14,31 +14,31 @@
       <header>
         <img class="title-icon" src="../assets/tray.png" alt="">
         <span class="logo">TorrentPlayer</span>
-        <button id="history-btn" title="Bibliothèque">🎬</button>
-        <button id="settings-btn" title="Paramètres">⚙</button>
+        <button id="history-btn" data-i18n-title="title.library" title="Library">🎬</button>
+        <button id="settings-btn" data-i18n-title="title.settings" title="Settings">⚙</button>
       </header>
 
       <div id="add-area">
         <div class="add-tabs">
-          <button class="add-tab active" data-tab="magnet">🔗 Magnet</button>
-          <button class="add-tab" data-tab="search">🔍 Recherche</button>
+          <button class="add-tab active" data-tab="magnet" data-i18n="tab.magnet">🔗 Magnet</button>
+          <button class="add-tab" data-tab="search" data-i18n="tab.search">🔍 Search</button>
         </div>
         <div class="add-panel" data-panel="magnet">
-          <input id="magnet-input" type="text" placeholder="Coller un lien magnet ou glisser un .torrent...">
-          <button id="browse-btn" title="Ouvrir un fichier .torrent">📁</button>
-          <button id="add-btn">Ajouter</button>
+          <input id="magnet-input" type="text" data-i18n-placeholder="magnet.placeholder" placeholder="Paste a magnet link or drag a .torrent...">
+          <button id="browse-btn" title="Open a .torrent file">📁</button>
+          <button id="add-btn" data-i18n="btn.add">Add</button>
         </div>
         <div class="add-panel hidden" data-panel="search">
-          <input id="search-input" type="text" placeholder="Nom du film, série...">
-          <button id="search-btn">Rechercher</button>
+          <input id="search-input" type="text" data-i18n-placeholder="search.placeholder" placeholder="Movie, series name...">
+          <button id="search-btn" data-i18n="btn.search">Search</button>
           <div class="search-filters">
             <div class="filter-group">
-              <button class="filter-btn active" data-filter="category" data-value="tout">Tout</button>
-              <button class="filter-btn" data-filter="category" data-value="films">Films</button>
-              <button class="filter-btn" data-filter="category" data-value="series">Séries</button>
+              <button class="filter-btn active" data-filter="category" data-value="tout" data-i18n="filter.all">All</button>
+              <button class="filter-btn" data-filter="category" data-value="films" data-i18n="filter.movies">Movies</button>
+              <button class="filter-btn" data-filter="category" data-value="series" data-i18n="filter.series">Series</button>
             </div>
             <div class="filter-group">
-              <button class="filter-btn active" data-filter="quality" data-value="tout">Toute qualité</button>
+              <button class="filter-btn active" data-filter="quality" data-value="tout" data-i18n="filter.anyQuality">Any quality</button>
               <button class="filter-btn" data-filter="quality" data-value="1080p">1080p</button>
               <button class="filter-btn" data-filter="quality" data-value="4k">4K</button>
             </div>
@@ -48,14 +48,14 @@
 
       <div id="update-banner" class="hidden">
         <span id="update-text"></span>
-        <button id="update-download-btn">Télécharger</button>
+        <button id="update-download-btn" data-i18n="btn.download">Download</button>
         <button id="update-dismiss-btn">✕</button>
       </div>
 
       <div id="no-player-banner" class="hidden">
         <span class="banner-icon">⚠</span>
-        <span>Aucun player vidéo détecté. Installez <strong>VLC</strong> ou <strong>mpv</strong>, puis configurez-le dans les paramètres.</span>
-        <button id="banner-open-settings">⚙ Paramètres</button>
+        <span data-i18n-html="banner.noPlayer">No video player detected. Install <strong>VLC</strong> or <strong>mpv</strong>, then configure it in settings.</span>
+        <button id="banner-open-settings" data-i18n="btn.openSettings">⚙ Settings</button>
       </div>
 
       <div id="search-results" class="hidden"></div>
@@ -64,8 +64,8 @@
 
       <div id="empty-state">
         <div class="empty-icon">🎬</div>
-        <p>Aucun torrent actif</p>
-        <p class="muted">Recherchez un titre ou collez un lien magnet</p>
+        <p data-i18n="empty.noTorrent">No active torrents</p>
+        <p class="muted" data-i18n="empty.hint">Search for a title or paste a magnet link</p>
       </div>
     </div>
 
@@ -73,15 +73,15 @@
     <div id="history-view" class="hidden">
       <header>
         <img class="title-icon" src="../assets/tray.png" alt="">
-        <button id="history-back-btn">← Retour</button>
-        <span class="logo">Bibliothèque</span>
+        <button id="history-back-btn" data-i18n="btn.back">← Back</button>
+        <span class="logo" data-i18n="history.title">Library</span>
       </header>
       <div id="history-content">
         <div id="library-grid"></div>
         <div id="history-empty" class="hidden">
           <div class="empty-icon">🎬</div>
-          <p>Bibliothèque vide</p>
-          <p class="muted">Les torrents terminés apparaîtront ici</p>
+          <p data-i18n="history.empty">Library empty</p>
+          <p class="muted" data-i18n="history.emptyHint">Completed torrents will appear here</p>
         </div>
       </div>
     </div>
@@ -90,63 +90,74 @@
     <div id="settings-view" class="hidden">
       <header>
         <img class="title-icon" src="../assets/tray.png" alt="">
-        <button id="back-btn">← Retour</button>
-        <span class="logo">Paramètres</span>
+        <button id="back-btn" data-i18n="btn.back">← Back</button>
+        <span class="logo" data-i18n="settings.title">Settings</span>
       </header>
 
       <div id="settings-content">
         <section>
-          <h2>Player vidéo</h2>
+          <h2 data-i18n="settings.general">General</h2>
           <div class="field-row">
-            <select id="player-select"></select>
-            <button id="rescan-btn">🔄 Re-scanner</button>
-          </div>
-          <div class="field-row">
-            <input id="player-path" type="text" placeholder="Chemin du player..." readonly>
-            <button id="browse-player-btn">Parcourir...</button>
-          </div>
-          <div class="field-row">
-            <label>Arguments</label>
-            <input id="player-args" type="text" placeholder="ex: --cache=yes --force-window">
+            <label data-i18n="label.language">Language</label>
+            <select id="language-select">
+              <option value="en">English</option>
+              <option value="fr">Français</option>
+            </select>
           </div>
         </section>
 
         <section>
-          <h2>Téléchargements</h2>
+          <h2 data-i18n="settings.player">Video player</h2>
           <div class="field-row">
-            <input id="download-dir" type="text" placeholder="Dossier de téléchargement..." readonly>
-            <button id="browse-dir-btn">Choisir...</button>
+            <select id="player-select"></select>
+            <button id="rescan-btn" data-i18n="btn.rescan">🔄 Re-scan</button>
+          </div>
+          <div class="field-row">
+            <input id="player-path" type="text" data-i18n-placeholder="player.placeholder" placeholder="Player path..." readonly>
+            <button id="browse-player-btn" data-i18n="btn.browse">Browse...</button>
+          </div>
+          <div class="field-row">
+            <label data-i18n="label.args">Arguments</label>
+            <input id="player-args" type="text" data-i18n-placeholder="args.placeholder" placeholder="e.g. --cache=yes --force-window">
+          </div>
+        </section>
+
+        <section>
+          <h2 data-i18n="settings.downloads">Downloads</h2>
+          <div class="field-row">
+            <input id="download-dir" type="text" data-i18n-placeholder="dir.placeholder" placeholder="Download folder..." readonly>
+            <button id="browse-dir-btn" data-i18n="btn.choose">Choose...</button>
           </div>
           <div class="field-row">
             <label class="checkbox-label">
               <input type="checkbox" id="delete-after-play">
-              Supprimer les fichiers à la fermeture de l'application
+              <span data-i18n="label.deleteAfterPlay">Delete files when the app closes</span>
             </label>
           </div>
           <div class="field-row">
-            <label>Max DL</label>
-            <input id="max-download" type="number" min="0" placeholder="illimité">
+            <label data-i18n="label.maxDl">Max DL</label>
+            <input id="max-download" type="number" min="0" data-i18n-placeholder="limit.placeholder" placeholder="unlimited">
             <span class="unit">KB/s</span>
           </div>
           <div class="field-row">
-            <label>Max UL</label>
-            <input id="max-upload" type="number" min="0" placeholder="illimité">
+            <label data-i18n="label.maxUl">Max UL</label>
+            <input id="max-upload" type="number" min="0" data-i18n-placeholder="limit.placeholder" placeholder="unlimited">
             <span class="unit">KB/s</span>
           </div>
         </section>
 
         <section>
-          <h2>Métadonnées</h2>
+          <h2 data-i18n="settings.metadata">Metadata</h2>
           <div class="field-row">
-            <label>Clé TMDB</label>
-            <input id="tmdb-key" type="text" placeholder="API Read Access Token (themoviedb.org)">
-            <button id="btn-test-tmdb" class="btn-secondary" type="button">Tester</button>
+            <label data-i18n="label.tmdbKey">TMDB key</label>
+            <input id="tmdb-key" type="text" data-i18n-placeholder="tmdb.placeholder" placeholder="API Read Access Token (themoviedb.org)">
+            <button id="btn-test-tmdb" class="btn-secondary" type="button" data-i18n="btn.test">Test</button>
           </div>
-          <p class="settings-hint">Clé gratuite sur <span class="settings-link">themoviedb.org → Settings → API</span></p>
+          <p class="settings-hint" data-i18n-html="settings.tmdbHint">Free key at <span class="settings-link">themoviedb.org → Settings → API</span></p>
         </section>
 
         <div id="settings-actions">
-          <button id="save-btn" class="btn-primary">Enregistrer</button>
+          <button id="save-btn" class="btn-primary" data-i18n="btn.save">Save</button>
         </div>
       </div>
     </div>
@@ -157,7 +168,7 @@
   <div id="file-modal" class="modal-overlay hidden">
     <div class="modal">
       <div class="modal-header">
-        <span>Choisir un fichier</span>
+        <span data-i18n="modal.chooseFile">Choose a file</span>
         <button id="modal-close">✕</button>
       </div>
       <div id="file-list"></div>
@@ -168,12 +179,12 @@
   <div id="cast-modal" class="modal-overlay hidden">
     <div class="modal">
       <div class="modal-header">
-        <span>📺 Diffuser sur...</span>
+        <span data-i18n="modal.castTo">📺 Cast to...</span>
         <button id="cast-modal-close">✕</button>
       </div>
-      <div id="cast-scanning">🔍 Recherche des appareils (4s)...</div>
+      <div id="cast-scanning">🔍 Scanning for devices (4s)...</div>
       <div id="device-list" class="hidden"></div>
-      <div id="cast-empty" class="hidden cast-empty">Aucun appareil Chromecast détecté sur le réseau</div>
+      <div id="cast-empty" class="hidden cast-empty">No Chromecast device detected on the network</div>
     </div>
   </div>
 
@@ -181,7 +192,7 @@
   <div id="clipboard-banner" class="hidden">
     <span id="clipboard-text"></span>
     <div class="banner-actions">
-      <button id="clipboard-add">Ajouter</button>
+      <button id="clipboard-add" data-i18n="btn.add">Add</button>
       <button id="clipboard-dismiss">✕</button>
     </div>
   </div>
@@ -190,11 +201,12 @@
 
   <!-- Contrôles de fenêtre (frameless) -->
   <div id="win-ctrl">
-    <button id="btn-minimize" title="Réduire">&#x2212;</button>
-    <button id="btn-maximize" title="Agrandir">&#x25A1;</button>
-    <button id="btn-close"    title="Fermer">&#x2715;</button>
+    <button id="btn-minimize" data-i18n-title="win.minimize" title="Minimize">&#x2212;</button>
+    <button id="btn-maximize" data-i18n-title="win.maximize" title="Maximize">&#x25A1;</button>
+    <button id="btn-close"    data-i18n-title="win.close"    title="Close">&#x2715;</button>
   </div>
 
+  <script src="i18n.js"></script>
   <script src="renderer.js"></script>
 </body>
 </html>

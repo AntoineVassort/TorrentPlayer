@@ -10,6 +10,7 @@ export function getDefaults(userDataPath) {
     deleteAfterPlay: false,
     windowBounds: null,
     tmdbApiKey: '',
+    language: 'en',
   };
 }
 
