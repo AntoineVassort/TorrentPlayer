@@ -1,0 +1,20 @@
+{
+  "name": "torrent-player",
+  "version": "0.1.0",
+  "description": "Stream torrents via an external player",
+  "type": "module",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "cli": "node src/index.js",
+    "dist": "electron-packager . TorrentPlayer --platform=win32 --arch=x64 --out=dist --overwrite --ignore=^/dist --no-asar && node scripts/postbuild.mjs"
+  },
+  "dependencies": {
+    "chromecasts": "^1.10.2",
+    "webtorrent": "^2.5.0"
+  },
+  "devDependencies": {
+    "@electron/packager": "^20.0.0",
+    "electron": "^42.0.1"
+  }
+}

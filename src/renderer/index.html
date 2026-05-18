@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:">
+  <title>TorrentPlayer</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+
+    <!-- Vue principale -->
+    <div id="main-view">
+      <header>
+        <img class="title-icon" src="../assets/tray.png" alt="">
+        <span class="logo">TorrentPlayer</span>
+        <button id="history-btn" title="Historique">📋</button>
+        <button id="settings-btn" title="Paramètres">⚙</button>
+      </header>
+
+      <div id="add-area">
+        <div class="add-tabs">
+          <button class="add-tab active" data-tab="magnet">🔗 Magnet</button>
+          <button class="add-tab" data-tab="search">🔍 Recherche</button>
+        </div>
+        <div class="add-panel" data-panel="magnet">
+          <input id="magnet-input" type="text" placeholder="Coller un lien magnet ou glisser un .torrent...">
+          <button id="browse-btn" title="Ouvrir un fichier .torrent">📁</button>
+          <button id="add-btn">Ajouter</button>
+        </div>
+        <div class="add-panel hidden" data-panel="search">
+          <input id="search-input" type="text" placeholder="Nom du film, série...">
+          <button id="search-btn">Rechercher</button>
+        </div>
+      </div>
+
+      <div id="no-player-banner" class="hidden">
+        <span class="banner-icon">⚠</span>
+        <span>Aucun player vidéo détecté. Installez <strong>VLC</strong> ou <strong>mpv</strong>, puis configurez-le dans les paramètres.</span>
+        <button id="banner-open-settings">⚙ Paramètres</button>
+      </div>
+
+      <div id="search-results" class="hidden"></div>
+
+      <div id="torrent-list"></div>
+
+      <div id="empty-state">
+        <div class="empty-icon">🎬</div>
+        <p>Aucun torrent actif</p>
+        <p class="muted">Recherchez un titre ou collez un lien magnet</p>
+      </div>
+    </div>
+
+    <!-- Vue historique -->
+    <div id="history-view" class="hidden">
+      <header>
+        <img class="title-icon" src="../assets/tray.png" alt="">
+        <button id="history-back-btn">← Retour</button>
+        <span class="logo">Historique</span>
+      </header>
+      <div id="history-content">
+        <div id="history-list"></div>
+        <div id="history-empty" class="hidden">
+          <div class="empty-icon">📋</div>
+          <p>Aucun historique</p>
+          <p class="muted">Les torrents supprimés apparaîtront ici</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Vue paramètres -->
+    <div id="settings-view" class="hidden">
+      <header>
+        <img class="title-icon" src="../assets/tray.png" alt="">
+        <button id="back-btn">← Retour</button>
+        <span class="logo">Paramètres</span>
+      </header>
+
+      <div id="settings-content">
+        <section>
+          <h2>Player vidéo</h2>
+          <div class="field-row">
+            <select id="player-select"></select>
+            <button id="rescan-btn">🔄 Re-scanner</button>
+          </div>
+          <div class="field-row">
+            <input id="player-path" type="text" placeholder="Chemin du player..." readonly>
+            <button id="browse-player-btn">Parcourir...</button>
+          </div>
+          <div class="field-row">
+            <label>Arguments</label>
+            <input id="player-args" type="text" placeholder="ex: --cache=yes --force-window">
+          </div>
+        </section>
+
+        <section>
+          <h2>Téléchargements</h2>
+          <div class="field-row">
+            <input id="download-dir" type="text" placeholder="Dossier de téléchargement..." readonly>
+            <button id="browse-dir-btn">Choisir...</button>
+          </div>
+          <div class="field-row">
+            <label class="checkbox-label">
+              <input type="checkbox" id="delete-after-play">
+              Supprimer les fichiers à la fermeture de l'application
+            </label>
+          </div>
+          <div class="field-row">
+            <label>Max DL</label>
+            <input id="max-download" type="number" min="0" placeholder="illimité">
+            <span class="unit">KB/s</span>
+          </div>
+          <div class="field-row">
+            <label>Max UL</label>
+            <input id="max-upload" type="number" min="0" placeholder="illimité">
+            <span class="unit">KB/s</span>
+          </div>
+        </section>
+
+        <section>
+          <h2>Métadonnées</h2>
+          <div class="field-row">
+            <label>Clé TMDB</label>
+            <input id="tmdb-key" type="text" placeholder="API Read Access Token (themoviedb.org)">
+            <button id="btn-test-tmdb" class="btn-secondary" type="button">Tester</button>
+          </div>
+          <p class="settings-hint">Clé gratuite sur <span class="settings-link">themoviedb.org → Settings → API</span></p>
+        </section>
+
+        <div id="settings-actions">
+          <button id="save-btn" class="btn-primary">Enregistrer</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Modal sélection de fichier -->
+  <div id="file-modal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <span>Choisir un fichier</span>
+        <button id="modal-close">✕</button>
+      </div>
+      <div id="file-list"></div>
+    </div>
+  </div>
+
+  <!-- Modal Chromecast -->
+  <div id="cast-modal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <span>📺 Diffuser sur...</span>
+        <button id="cast-modal-close">✕</button>
+      </div>
+      <div id="cast-scanning">🔍 Recherche des appareils (4s)...</div>
+      <div id="device-list" class="hidden"></div>
+      <div id="cast-empty" class="hidden cast-empty">Aucun appareil Chromecast détecté sur le réseau</div>
+    </div>
+  </div>
+
+  <!-- Bannière clipboard -->
+  <div id="clipboard-banner" class="hidden">
+    <span id="clipboard-text"></span>
+    <div class="banner-actions">
+      <button id="clipboard-add">Ajouter</button>
+      <button id="clipboard-dismiss">✕</button>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <!-- Contrôles de fenêtre (frameless) -->
+  <div id="win-ctrl">
+    <button id="btn-minimize" title="Réduire">&#x2212;</button>
+    <button id="btn-maximize" title="Agrandir">&#x25A1;</button>
+    <button id="btn-close"    title="Fermer">&#x2715;</button>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>
