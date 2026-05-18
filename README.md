@@ -10,14 +10,15 @@ TorrentPlayer downloads and streams simultaneously. It serves the file over a lo
 
 ## Features
 
-- **Search** — built-in search powered by a public torrent index
+- **Search** — dual-source search (The Pirate Bay + YTS) with category and quality filters (1080p, 4K…)
 - **Stream while downloading** — playback starts before the download completes
 - **Smart queue** — download one at a time, drag to reorder
+- **Library** — media grid with TMDB posters, ratings and titles for everything you've watched
 - **TMDB metadata** — automatic posters, titles, ratings (optional API key)
 - **mpv resume** — saves and restores playback position via IPC
 - **Subtitles** — auto-detects `.srt`/`.ass`/`.vtt` in the torrent and passes them to the player
 - **Chromecast** — cast to any device on your local network
-- **History** — browse and re-download previously watched torrents
+- **Auto-update** — notifies you when a new version is available
 - **System tray** — closing the window minimizes to tray
 - **Clipboard detection** — paste a magnet link and the app picks it up automatically
 
