@@ -7,6 +7,7 @@ let toastTimer = null;
 let pendingClipboardMagnet = null;
 let filePickerTorrentId = null;
 let castTargetId = null;
+let searchFilters = { category: 'tout', quality: 'tout' };
 
 // --- Init ---
 
@@ -14,6 +15,13 @@ async function init() {
   [settings, players] = await Promise.all([window.api.getSettings(), window.api.detectPlayers()]);
   window.api.onState(data => { torrents = data; renderList(); });
   window.api.onClipboardMagnet(magnet => showClipboardBanner(magnet));
+  window.api.onUpdateAvailable(({ version, url }) => {
+    let releaseUrl = url;
+    document.getElementById('update-text').textContent = `Nouvelle version disponible : ${version}`;
+    document.getElementById('update-download-btn').onclick = () => window.api.openRelease(releaseUrl);
+    document.getElementById('update-dismiss-btn').onclick = () => document.getElementById('update-banner').classList.add('hidden');
+    document.getElementById('update-banner').classList.remove('hidden');
+  });
   bindUI();
   await initWinCtrl();
   if (!settings.player && players.length === 0) {
@@ -44,6 +52,15 @@ function bindUI() {
 
   document.getElementById('search-btn').addEventListener('click', handleSearch);
   document.getElementById('search-input').addEventListener('keydown', e => { if (e.key === 'Enter') handleSearch(); });
+
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const group = btn.dataset.filter;
+      document.querySelectorAll(`.filter-btn[data-filter="${group}"]`).forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      searchFilters[group] = btn.dataset.value;
+    });
+  });
 
   document.addEventListener('dragover', e => {
     if (e.dataTransfer.types.includes('Files')) {
@@ -135,7 +152,7 @@ async function handleSearch() {
   btn.textContent = '...';
 
   try {
-    const results = await window.api.searchTorrents(query);
+    const results = await window.api.searchTorrents(query, searchFilters);
     resultsEl.textContent = '';
     if (!results.length) {
       const el = document.createElement('div');
@@ -157,26 +174,50 @@ async function handleSearch() {
   }
 }
 
+function extractQuality(name) {
+  if (/2160p|4k|uhd/i.test(name)) return '4K';
+  if (/1080p|1080i/i.test(name)) return '1080p';
+  if (/720p/i.test(name)) return '720p';
+  if (/480p/i.test(name)) return '480p';
+  return null;
+}
+
+const CLEAN_RE = /\b(2160p|1080p|1080i|720p|480p|4k|uhd|bluray|blu-ray|bdrip|brrip|webrip|web-dl|webdl|hdrip|dvdrip|x264|x265|h264|h265|hevc|avc|xvid|aac|ac3|dts|yify|rarbg|proper|repack|hdr|sdr|10bit|remux|extended|theatrical)\b.*/gi;
+function cleanTitle(name) {
+  return name
+    .replace(/\.(mkv|mp4|avi|mov|webm|m4v)$/i, '')
+    .replace(/[\._]/g, ' ')
+    .replace(CLEAN_RE, '')
+    .replace(/\s+/g, ' ')
+    .trim() || name;
+}
+
+function seedsClass(n) {
+  if (n >= 100) return 'seeds-high';
+  if (n >= 20)  return 'seeds-mid';
+  return 'seeds-low';
+}
+
 function renderResult(r) {
+  const quality   = extractQuality(r.name);
+  const title     = cleanTitle(r.name);
+
   const row = document.createElement('div');
   row.className = 'search-row';
-
-  const name = document.createElement('span');
-  name.className = 'search-name';
-  name.textContent = r.name;
-
-  const meta = document.createElement('span');
-  meta.className = 'search-meta';
-
-  const seeds = document.createElement('span');
-  seeds.className = 'search-seeds';
-  seeds.textContent = `↑${r.seeders}`;
-
-  const info = document.createElement('span');
-  info.textContent = `↓${r.leechers}  ${fmtSize(r.size)}`;
-
-  meta.append(seeds, info);
-  row.append(name, meta);
+  row.title = r.name;
+  row.innerHTML = `
+    <div class="search-row-top">
+      <span class="search-name">${title}</span>
+      ${quality ? `<span class="search-quality q-${quality.toLowerCase()}">${quality}</span>` : ''}
+    </div>
+    <div class="search-raw-name">${r.name}</div>
+    <div class="search-row-bottom">
+      <span class="search-source search-source-${(r.source||'').toLowerCase()}">${r.source||''}</span>
+      <span class="search-seeds ${seedsClass(r.seeders)}">↑ ${r.seeders}</span>
+      <span class="search-leechers">↓ ${r.leechers}</span>
+      <span class="search-size">${fmtSize(r.size)}</span>
+    </div>
+  `;
   row.addEventListener('click', () => doAdd(r.magnet));
   return row;
 }
@@ -549,54 +590,114 @@ function closeHistory() {
 }
 
 async function renderHistory() {
-  const list = document.getElementById('history-list');
+  const grid = document.getElementById('library-grid');
   const empty = document.getElementById('history-empty');
-  list.textContent = '';
+  grid.textContent = '';
 
-  let entries = [];
-  try { entries = await window.api.getHistory(); } catch {}
+  let history = [];
+  try { history = await window.api.getHistory(); } catch {}
 
-  empty.classList.toggle('hidden', entries.length > 0);
+  const activeDone = torrents.filter(t => t.done);
+  const items = [
+    ...activeDone.map(t => ({
+      type: 'active', id: t.id,
+      poster: t.meta?.poster || null,
+      title: t.meta?.title || t.name,
+      year: t.meta?.year || null,
+      rating: t.meta?.rating || null,
+      name: t.name,
+    })),
+    ...history.map(e => ({ type: 'history', ...e })),
+  ];
 
-  for (const e of entries) {
+  empty.classList.toggle('hidden', items.length > 0);
+
+  for (const item of items) {
     const card = document.createElement('div');
-    card.className = 'history-card';
+    card.className = 'lib-card';
 
-    const posterHTML = e.poster
-      ? `<img class="history-poster" src="${e.poster}" alt="">`
-      : `<div class="history-poster-placeholder"></div>`;
+    const posterHTML = item.poster
+      ? `<img class="lib-poster" src="${item.poster}" alt="">`
+      : `<div class="lib-no-poster"></div>`;
 
-    const ratingHTML = e.rating ? `<span class="history-rating">⭐ ${e.rating}</span>` : '';
-    const yearHTML   = e.year   ? `<span class="history-year">${e.year}</span>` : '';
-    const titleHTML  = e.title  ? `<div class="history-title">${e.title}</div>` : '';
+    const ratingBadge = item.rating ? `<div class="lib-rating">⭐ ${item.rating}</div>` : '';
+    const activeBadge = item.type === 'active' ? `<div class="lib-active-badge">✓</div>` : '';
+    const yearLine    = item.year ? `<div class="lib-info-year">${item.year}</div>` : '';
+
+    const actionBtn = item.type === 'active'
+      ? `<button class="btn-lib-play">▶ Lire</button>`
+      : (item.magnet ? `<button class="btn-lib-redownload">↩</button>` : '');
 
     card.innerHTML = `
       ${posterHTML}
-      <div class="history-body">
-        ${titleHTML}
-        <div class="history-filename">${e.name}</div>
-        <div class="history-meta">${ratingHTML}${yearHTML}<span class="history-date">${fmtDate(e.watchedAt)}</span></div>
+      ${ratingBadge}
+      ${activeBadge}
+      <div class="lib-info">
+        <div class="lib-info-title">${item.title || item.name}</div>
+        ${yearLine}
       </div>
-      <div class="history-actions">
-        ${e.magnet ? '<button class="btn-redownload">↩ Retélécharger</button>' : ''}
-        <button class="btn-history-remove">✕</button>
+      <div class="lib-overlay">
+        <div class="lib-overlay-actions">
+          ${actionBtn}
+          <button class="btn-lib-remove">✕</button>
+        </div>
       </div>
     `;
 
-    if (e.magnet) {
-      card.querySelector('.btn-redownload').addEventListener('click', () => {
-        doAdd(e.magnet);
+    if (item.type === 'active') {
+      card.querySelector('.btn-lib-play')?.addEventListener('click', e => {
+        e.stopPropagation();
+        window.api.playTorrent(item.id);
+      });
+      card.querySelector('.btn-lib-remove').addEventListener('click', e => {
+        e.stopPropagation();
+        window.api.removeTorrent(item.id);
+        card.remove();
+        if (!grid.children.length) empty.classList.remove('hidden');
+      });
+    } else {
+      card.querySelector('.btn-lib-redownload')?.addEventListener('click', e => {
+        e.stopPropagation();
+        doAdd(item.magnet);
         closeHistory();
-        toast(`Ajouté : ${e.name}`);
+        toast(`Ajouté : ${item.name}`);
+      });
+      card.querySelector('.btn-lib-remove').addEventListener('click', async e => {
+        e.stopPropagation();
+        await window.api.removeHistory(item.id);
+        card.remove();
+        if (!grid.children.length) empty.classList.remove('hidden');
       });
     }
-    card.querySelector('.btn-history-remove').addEventListener('click', async () => {
-      await window.api.removeHistory(e.id);
-      card.remove();
-      if (!list.children.length) empty.classList.remove('hidden');
-    });
 
-    list.appendChild(card);
+    grid.appendChild(card);
+
+    if (!item.poster && item.type === 'history') {
+      window.api.fetchHistoryMeta(item.id, item.name).then(meta => {
+        if (!meta?.poster) return;
+        const placeholder = card.querySelector('.lib-no-poster');
+        if (placeholder) {
+          const img = document.createElement('img');
+          img.className = 'lib-poster';
+          img.src = meta.poster;
+          img.alt = '';
+          placeholder.replaceWith(img);
+        }
+        if (meta.title) card.querySelector('.lib-info-title').textContent = meta.title;
+        if (meta.year && !card.querySelector('.lib-info-year')) {
+          const y = document.createElement('div');
+          y.className = 'lib-info-year';
+          y.textContent = meta.year;
+          card.querySelector('.lib-info').appendChild(y);
+        }
+        if (meta.rating && !card.querySelector('.lib-rating')) {
+          const r = document.createElement('div');
+          r.className = 'lib-rating';
+          r.textContent = `⭐ ${meta.rating}`;
+          card.appendChild(r);
+        }
+      }).catch(() => {});
+    }
   }
 }
 

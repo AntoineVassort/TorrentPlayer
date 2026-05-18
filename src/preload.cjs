@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('api', {
   removeTorrent:     (id)         => ipcRenderer.invoke('torrent:remove', id),
   reorderQueue:      (order)      => ipcRenderer.invoke('queue:reorder', order),
   getHistory:        ()           => ipcRenderer.invoke('history:get'),
+  fetchHistoryMeta:  (id, name)   => ipcRenderer.invoke('history:fetchMeta', id, name),
   removeHistory:     (id)         => ipcRenderer.invoke('history:remove', id),
   discoverDevices:   ()           => ipcRenderer.invoke('cast:discover'),
   castToDevice:      (id, host)   => ipcRenderer.invoke('cast:play', id, host),
@@ -20,7 +21,7 @@ contextBridge.exposeInMainWorld('api', {
   openTorrentDialog: ()           => ipcRenderer.invoke('dialog:torrent'),
   openPlayerDialog:  ()           => ipcRenderer.invoke('dialog:player'),
   openDirDialog:     ()           => ipcRenderer.invoke('dialog:directory'),
-  searchTorrents:    (query)      => ipcRenderer.invoke('search:query', query),
+  searchTorrents:    (query, opts) => ipcRenderer.invoke('search:query', query, opts),
   onState:           (cb)         => ipcRenderer.on('torrent:state', (_, data) => cb(data)),
   onClipboardMagnet: (cb)         => ipcRenderer.on('clipboard:magnet', (_, magnet) => cb(magnet)),
   // Window controls
@@ -30,4 +31,6 @@ contextBridge.exposeInMainWorld('api', {
   isMaximized:       ()           => ipcRenderer.invoke('window:isMaximized'),
   onMaximize:        (cb)         => ipcRenderer.on('window:maximize',   () => cb(true)),
   onUnmaximize:      (cb)         => ipcRenderer.on('window:unmaximize', () => cb(false)),
+  onUpdateAvailable: (cb)         => ipcRenderer.on('update:available',  (_, data) => cb(data)),
+  openRelease:       (url)        => ipcRenderer.send('update:openRelease', url),
 });

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, Menu, Tray, nativeImage, Notification, clipboard } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, Menu, Tray, nativeImage, Notification, clipboard, shell } from 'electron';
 import { fileURLToPath } from 'url';
 import path from 'path';
 import http from 'http';
@@ -10,10 +10,31 @@ import { detect } from './playerDetector.js';
 import { getSettings, saveSettings } from './settings.js';
 import { searchTorrents } from './torrentSearch.js';
 import { fetchMeta } from './tmdb.js';
-import { addEntry, loadHistory, removeEntry } from './history.js';
+import { addEntry, loadHistory, removeEntry, updateEntry } from './history.js';
 import { discoverDevices, castMedia, getLocalIP } from './chromecast.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+function semverNewer(latest, current) {
+  const p = v => v.replace(/^v/, '').split('.').map(Number);
+  const [la, lb, lc = 0] = p(latest);
+  const [ca, cb, cc = 0] = p(current);
+  return la !== ca ? la > ca : lb !== cb ? lb > cb : lc > cc;
+}
+
+async function checkForUpdates(win) {
+  try {
+    const res = await fetch('https://api.github.com/repos/AntoineVassort/TorrentPlayer/releases/latest', {
+      headers: { 'User-Agent': 'TorrentPlayer' },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.tag_name && semverNewer(data.tag_name, app.getVersion())) {
+      win.webContents.send('update:available', { version: data.tag_name, url: data.html_url });
+    }
+  } catch {}
+}
 
 const VIDEO_EXTENSIONS    = ['.mp4', '.mkv', '.avi', '.mov', '.webm', '.m4v', '.ts', '.flv'];
 const SUBTITLE_EXTENSIONS = ['.srt', '.ass', '.ssa', '.vtt', '.sub'];
@@ -344,6 +365,9 @@ app.whenReady().then(async () => {
     mainWindow.webContents.send('torrent:state', state);
   }, 1000);
 
+  // Check for updates
+  mainWindow.webContents.once('did-finish-load', () => checkForUpdates(mainWindow));
+
   // Restore session
   mainWindow.webContents.once('did-finish-load', async () => {
     const settings = getSettings(app.getPath('userData'));
@@ -547,6 +571,14 @@ ipcMain.handle('queue:reorder', (_, order) => {
 
 ipcMain.handle('history:get', () => loadHistory(app.getPath('userData')));
 
+ipcMain.handle('history:fetchMeta', async (_, id, name) => {
+  const settings = getSettings(app.getPath('userData'));
+  if (!settings.tmdbApiKey) return null;
+  const meta = await fetchMeta(name, settings.tmdbApiKey);
+  if (meta) updateEntry(app.getPath('userData'), id, meta);
+  return meta;
+});
+
 ipcMain.handle('history:remove', (_, id) => {
   removeEntry(app.getPath('userData'), id);
   return true;
@@ -562,6 +594,8 @@ ipcMain.handle('cast:play', async (_, id, host) => {
   entry.casting = host;
   return true;
 });
+
+ipcMain.on('update:openRelease', (_, url) => shell.openExternal(url));
 
 ipcMain.handle('settings:get', () => getSettings(app.getPath('userData')));
 
@@ -599,7 +633,7 @@ ipcMain.handle('dialog:directory', async () => {
   return r.canceled ? null : r.filePaths[0];
 });
 
-ipcMain.handle('search:query', async (_, query) => searchTorrents(query));
+ipcMain.handle('search:query', async (_, query, options) => searchTorrents(query, options));
 
 // --- Window controls ---
 

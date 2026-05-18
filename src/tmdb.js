@@ -80,7 +80,7 @@ export async function fetchMeta(name, apiKey) {
     let poster = null;
     if (result.poster_path) {
       try {
-        const buf = await fetchBuffer(`https://image.tmdb.org/t/p/w92${result.poster_path}`);
+        const buf = await fetchBuffer(`https://image.tmdb.org/t/p/w185${result.poster_path}`);
         poster = `data:image/jpeg;base64,${buf.toString('base64')}`;
       } catch (e) {
         console.error(`[TMDB] Échec téléchargement poster: ${e.message}`);

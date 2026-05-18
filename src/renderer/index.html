@@ -14,7 +14,7 @@
       <header>
         <img class="title-icon" src="../assets/tray.png" alt="">
         <span class="logo">TorrentPlayer</span>
-        <button id="history-btn" title="Historique">📋</button>
+        <button id="history-btn" title="Bibliothèque">🎬</button>
         <button id="settings-btn" title="Paramètres">⚙</button>
       </header>
 
@@ -31,7 +31,25 @@
         <div class="add-panel hidden" data-panel="search">
           <input id="search-input" type="text" placeholder="Nom du film, série...">
           <button id="search-btn">Rechercher</button>
+          <div class="search-filters">
+            <div class="filter-group">
+              <button class="filter-btn active" data-filter="category" data-value="tout">Tout</button>
+              <button class="filter-btn" data-filter="category" data-value="films">Films</button>
+              <button class="filter-btn" data-filter="category" data-value="series">Séries</button>
+            </div>
+            <div class="filter-group">
+              <button class="filter-btn active" data-filter="quality" data-value="tout">Toute qualité</button>
+              <button class="filter-btn" data-filter="quality" data-value="1080p">1080p</button>
+              <button class="filter-btn" data-filter="quality" data-value="4k">4K</button>
+            </div>
+          </div>
         </div>
+      </div>
+
+      <div id="update-banner" class="hidden">
+        <span id="update-text"></span>
+        <button id="update-download-btn">Télécharger</button>
+        <button id="update-dismiss-btn">✕</button>
       </div>
 
       <div id="no-player-banner" class="hidden">
@@ -51,19 +69,19 @@
       </div>
     </div>
 
-    <!-- Vue historique -->
+    <!-- Vue bibliothèque -->
     <div id="history-view" class="hidden">
       <header>
         <img class="title-icon" src="../assets/tray.png" alt="">
         <button id="history-back-btn">← Retour</button>
-        <span class="logo">Historique</span>
+        <span class="logo">Bibliothèque</span>
       </header>
       <div id="history-content">
-        <div id="history-list"></div>
+        <div id="library-grid"></div>
         <div id="history-empty" class="hidden">
-          <div class="empty-icon">📋</div>
-          <p>Aucun historique</p>
-          <p class="muted">Les torrents supprimés apparaîtront ici</p>
+          <div class="empty-icon">🎬</div>
+          <p>Bibliothèque vide</p>
+          <p class="muted">Les torrents terminés apparaîtront ici</p>
         </div>
       </div>
     </div>

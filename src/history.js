@@ -20,6 +20,14 @@ export function addEntry(userData, entry) {
   fs.writeFileSync(historyPath(userData), JSON.stringify(updated, null, 2));
 }
 
+export function updateEntry(userData, id, fields) {
+  const history = loadHistory(userData);
+  const entry = history.find(e => e.id === id);
+  if (!entry) return;
+  Object.assign(entry, fields);
+  fs.writeFileSync(historyPath(userData), JSON.stringify(history, null, 2));
+}
+
 export function removeEntry(userData, id) {
   const history = loadHistory(userData);
   fs.writeFileSync(
