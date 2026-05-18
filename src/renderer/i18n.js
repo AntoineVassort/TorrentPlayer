@@ -81,6 +81,9 @@ const TRANSLATIONS = {
     'toast.file': 'File: {name}',
     'drag.handle': 'Reorder',
     'btn.chooseFile': 'Choose a file',
+    'sort.recent': 'Recent',
+    'sort.title': 'Title',
+    'sort.rating': 'Rating',
   },
   fr: {
     'tab.magnet': '🔗 Magnet',
@@ -162,6 +165,9 @@ const TRANSLATIONS = {
     'toast.file': 'Fichier : {name}',
     'drag.handle': 'Réordonner',
     'btn.chooseFile': 'Choisir un fichier',
+    'sort.recent': 'Récents',
+    'sort.title': 'Titre',
+    'sort.rating': 'Note',
   },
 };
 

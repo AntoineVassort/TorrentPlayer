@@ -8,6 +8,8 @@ let pendingClipboardMagnet = null;
 let filePickerTorrentId = null;
 let castTargetId = null;
 let searchFilters = { category: 'tout', quality: 'tout' };
+let libTypeFilter = 'all';
+let libSort = 'date';
 
 // --- Init ---
 
@@ -105,6 +107,19 @@ function bindUI() {
 
   document.getElementById('language-select').addEventListener('change', e => {
     applyTranslations(e.target.value);
+  });
+
+  document.querySelectorAll('[data-lib-filter]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('[data-lib-filter]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      libTypeFilter = btn.dataset.libFilter;
+      renderHistory();
+    });
+  });
+  document.getElementById('lib-sort').addEventListener('change', e => {
+    libSort = e.target.value;
+    renderHistory();
   });
 
   document.getElementById('history-btn').addEventListener('click', openHistory);
@@ -597,6 +612,10 @@ function closeHistory() {
   document.getElementById('main-view').classList.remove('hidden');
 }
 
+function isSeries(name) {
+  return /\b[Ss]\d{1,2}[Ee]\d{1,2}\b/.test(name || '');
+}
+
 async function renderHistory() {
   const grid = document.getElementById('library-grid');
   const empty = document.getElementById('history-empty');
@@ -606,7 +625,7 @@ async function renderHistory() {
   try { history = await window.api.getHistory(); } catch {}
 
   const activeDone = torrents.filter(t => t.done);
-  const items = [
+  let items = [
     ...activeDone.map(t => ({
       type: 'active', id: t.id,
       poster: t.meta?.poster || null,
@@ -614,9 +633,19 @@ async function renderHistory() {
       year: t.meta?.year || null,
       rating: t.meta?.rating || null,
       name: t.name,
+      watchedAt: null,
     })),
     ...history.map(e => ({ type: 'history', ...e })),
   ];
+
+  if (libTypeFilter === 'movies') items = items.filter(i => !isSeries(i.name));
+  else if (libTypeFilter === 'series') items = items.filter(i => isSeries(i.name));
+
+  if (libSort === 'title') {
+    items.sort((a, b) => (a.title || a.name).localeCompare(b.title || b.name));
+  } else if (libSort === 'rating') {
+    items.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+  }
 
   empty.classList.toggle('hidden', items.length > 0);
 

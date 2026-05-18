@@ -768,6 +768,24 @@ section h2 {
   padding: 60px 0;
 }
 
+#library-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  gap: 8px;
+}
+#lib-sort {
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+#lib-sort:focus { outline: none; border-color: var(--accent); color: var(--text); }
+
 #library-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));

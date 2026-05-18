@@ -77,6 +77,18 @@
         <span class="logo" data-i18n="history.title">Library</span>
       </header>
       <div id="history-content">
+        <div id="library-toolbar">
+          <div class="filter-group">
+            <button class="filter-btn active" data-lib-filter="all" data-i18n="filter.all">All</button>
+            <button class="filter-btn" data-lib-filter="movies" data-i18n="filter.movies">Movies</button>
+            <button class="filter-btn" data-lib-filter="series" data-i18n="filter.series">Series</button>
+          </div>
+          <select id="lib-sort">
+            <option value="date" data-i18n="sort.recent">Recent</option>
+            <option value="title" data-i18n="sort.title">Title</option>
+            <option value="rating" data-i18n="sort.rating">Rating</option>
+          </select>
+        </div>
         <div id="library-grid"></div>
         <div id="history-empty" class="hidden">
           <div class="empty-icon">🎬</div>

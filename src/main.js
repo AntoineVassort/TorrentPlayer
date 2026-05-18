@@ -305,7 +305,11 @@ function addTorrentInternal(torrentId, magnet, downloadDir, resumePos = null) {
 
           torrent.once('done', () => {
             if (Notification.isSupported()) {
-              new Notification({ title: 'TorrentPlayer', body: `${fileState.file.name} — téléchargement terminé` }).show();
+              const s = getSettings(app.getPath('userData'));
+              const body = s.language === 'fr'
+                ? `${fileState.file.name} — téléchargement terminé`
+                : `${fileState.file.name} — download complete`;
+              new Notification({ title: 'TorrentPlayer', body }).show();
             }
             tray?.setToolTip('TorrentPlayer');
             applyQueueRules();
