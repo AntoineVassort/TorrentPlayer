@@ -61,7 +61,7 @@ The app auto-detects installed players (VLC, mpv, MPC-HC, MPC-BE, PotPlayer). No
 > Node.js is bundled in the release exe — end users don't need to install anything.
 
 ```bash
-git clone https://github.com/Antoinewf3/TorrentPlayer
+git clone https://github.com/AntoineVassort/TorrentPlayer
 cd TorrentPlayer
 npm install      # requires Node.js 18+
 npm start        # dev mode
