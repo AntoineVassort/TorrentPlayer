@@ -10,6 +10,10 @@ let castTargetId = null;
 let searchFilters = { category: 'tout', quality: 'tout' };
 let libTypeFilter = 'all';
 let libSort = 'date';
+let discoverCat = 'movies';
+let discoverCache = {};
+let torrentioTitles = [];
+let torrentioCurrentItem = null;
 
 // --- Init ---
 
@@ -49,19 +53,49 @@ function bindUI() {
       document.querySelectorAll('.add-panel').forEach(p => p.classList.add('hidden'));
       tab.classList.add('active');
       document.querySelector(`[data-panel="${tab.dataset.tab}"]`).classList.remove('hidden');
-      if (tab.dataset.tab === 'magnet') document.getElementById('search-results').classList.add('hidden');
+      const isDiscover = tab.dataset.tab === 'discover';
+    document.getElementById('torrent-list').classList.toggle('hidden', isDiscover);
+    document.getElementById('empty-state').classList.toggle('hidden', isDiscover);
+    if (tab.dataset.tab === 'magnet') {
+      const sr = document.getElementById('search-results');
+      sr.classList.add('hidden');
+      sr.classList.remove('expanded');
+      document.getElementById('discover-results').classList.add('hidden');
+    } else if (tab.dataset.tab === 'search') {
+      document.getElementById('discover-results').classList.add('hidden');
+    } else if (isDiscover) {
+      const sr = document.getElementById('search-results');
+      sr.classList.add('hidden');
+      sr.classList.remove('expanded');
+      document.getElementById('discover-results').classList.remove('hidden');
+      loadDiscover(discoverCat);
+    }
     });
   }
 
   document.getElementById('search-btn').addEventListener('click', handleSearch);
   document.getElementById('search-input').addEventListener('keydown', e => { if (e.key === 'Enter') handleSearch(); });
 
-  document.querySelectorAll('.filter-btn').forEach(btn => {
+  document.querySelectorAll('.filter-btn[data-filter]').forEach(btn => {
     btn.addEventListener('click', () => {
       const group = btn.dataset.filter;
       document.querySelectorAll(`.filter-btn[data-filter="${group}"]`).forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       searchFilters[group] = btn.dataset.value;
+      if (group === 'category') {
+        const isTorrentio = ['tout', 'films', 'series', 'anime'].includes(btn.dataset.value);
+        document.getElementById('quality-filter-group').classList.toggle('hidden', isTorrentio);
+        document.getElementById('search-results').classList.add('hidden');
+      }
+    });
+  });
+
+  document.querySelectorAll('[data-discover-cat]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('[data-discover-cat]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      discoverCat = btn.dataset.discoverCat;
+      loadDiscover(discoverCat);
     });
   });
 
@@ -90,7 +124,6 @@ function bindUI() {
   document.getElementById('settings-btn').addEventListener('click', openSettings);
   document.getElementById('back-btn').addEventListener('click', closeSettings);
   document.getElementById('save-btn').addEventListener('click', saveSettings);
-  document.getElementById('btn-test-tmdb').addEventListener('click', testTmdb);
   document.getElementById('rescan-btn').addEventListener('click', rescan);
   document.getElementById('browse-player-btn').addEventListener('click', browsePlayer);
   document.getElementById('browse-dir-btn').addEventListener('click', async () => {
@@ -151,12 +184,65 @@ function bindUI() {
   });
 }
 
+// --- Discover ---
+
+async function loadDiscover(cat) {
+  const grid = document.getElementById('discover-results');
+  if (discoverCache[cat]) { renderDiscoverGrid(discoverCache[cat]); return; }
+  grid.innerHTML = `<div class="discover-loading">${t('discover.loading')}</div>`;
+  try {
+    const items = await window.api.discoverFetch(cat);
+    discoverCache[cat] = items;
+    renderDiscoverGrid(items);
+  } catch {
+    grid.innerHTML = `<div class="discover-empty">${t('discover.error')}</div>`;
+  }
+}
+
+function renderDiscoverGrid(items) {
+  const grid = document.getElementById('discover-results');
+  grid.innerHTML = '';
+  if (!items.length) {
+    grid.innerHTML = `<div class="discover-empty">${t('discover.unavailable')}</div>`;
+    return;
+  }
+  for (const item of items) {
+    const card = document.createElement('div');
+    card.className = 'discover-card';
+    const year = item.year || '';
+    const rating = item.rating ? `★ ${item.rating}` : '';
+    const meta = [year, rating].filter(Boolean).join(' · ');
+    if (!item.posterUrl) card.classList.add('no-poster');
+    card.innerHTML = `
+      <div class="discover-poster">
+        ${item.posterUrl ? `<img src="${item.posterUrl}" alt="" loading="lazy">` : ''}
+      </div>
+      <div class="discover-info">
+        <span class="discover-title">${item.title}</span>
+        ${meta ? `<span class="discover-meta">${meta}</span>` : ''}
+      </div>
+    `;
+    card.addEventListener('click', () => {
+      document.querySelector('[data-tab="search"]').click();
+      document.getElementById('search-input').value = item.title;
+      handleSearch();
+    });
+    grid.appendChild(card);
+  }
+}
+
 // --- Add ---
 
 async function handleSearch() {
   const input = document.getElementById('search-input');
   const query = input.value.trim();
   if (!query) return;
+
+  const category = searchFilters.category;
+  if (category === 'tout')   { handleTorrentioSearch(query, 'all');    return; }
+  if (category === 'films')  { handleTorrentioSearch(query, 'movie');  return; }
+  if (category === 'series') { handleTorrentioSearch(query, 'series'); return; }
+  if (category === 'anime')  { handleTorrentioSearch(query, 'anime');  return; }
 
   const resultsEl = document.getElementById('search-results');
   resultsEl.classList.remove('hidden');
@@ -242,6 +328,156 @@ function renderResult(r) {
   return row;
 }
 
+// --- Torrentio ---
+
+async function handleTorrentioSearch(query, type) {
+  torrentioTitles = [];
+  torrentioCurrentItem = null;
+  const resultsEl = document.getElementById('search-results');
+  resultsEl.classList.remove('hidden');
+  resultsEl.classList.add('expanded');
+  resultsEl.innerHTML = `<div class="search-status">${t('status.searching')}</div>`;
+
+  const btn = document.getElementById('search-btn');
+  btn.disabled = true;
+  btn.textContent = '...';
+
+  try {
+    const results = await window.api.torrentioSearch(query, type);
+    if (!results.length) {
+      resultsEl.innerHTML = `<div class="search-status">${t('status.noResults')}</div>`;
+    } else {
+      torrentioTitles = results;
+      renderTorrentioTitles(results, type);
+    }
+  } catch {
+    resultsEl.innerHTML = `<div class="search-status">${t('status.networkError')}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = t('btn.search');
+  }
+}
+
+function renderTorrentioTitles(results, type) {
+  const resultsEl = document.getElementById('search-results');
+  resultsEl.innerHTML = '';
+  const grid = document.createElement('div');
+  grid.className = 'torrentio-grid';
+  for (const item of results) {
+    const card = document.createElement('div');
+    card.className = 'torrentio-card';
+    const meta = [item.year, item.rating ? `★ ${item.rating}` : null].filter(Boolean).join(' · ');
+    card.innerHTML = `
+      <div class="torrentio-poster">
+        ${item.poster ? `<img src="${item.poster}" alt="" loading="lazy">` : '<div class="torrentio-poster-empty">🎬</div>'}
+      </div>
+      <div class="torrentio-card-info">
+        <div class="torrentio-card-title" title="${item.title}">${item.title}</div>
+        ${meta ? `<div class="torrentio-card-meta">${meta}</div>` : ''}
+      </div>
+    `;
+    card.addEventListener('click', () => selectTorrentioTitle(item));
+    grid.appendChild(card);
+  }
+  resultsEl.appendChild(grid);
+}
+
+function selectTorrentioTitle(item) {
+  torrentioCurrentItem = item;
+  if (item.type === 'movie') {
+    fetchAndRenderTorrentioStreams(item.id, 'movie', null, null, item);
+  } else {
+    renderTorrentioEpPicker(item);
+  }
+}
+
+function renderTorrentioEpPicker(item) {
+  const resultsEl = document.getElementById('search-results');
+  const isAnime = item.type === 'anime';
+  resultsEl.innerHTML = `
+    <div class="torrentio-back">
+      <button id="torrentio-back-btn">${t('torrentio.back')}</button>
+      <div class="torrentio-stream-header-info">
+        ${item.poster ? `<img class="torrentio-stream-poster" src="${item.poster}" alt="">` : ''}
+        <div>
+          <div class="torrentio-stream-title">${item.title}</div>
+          ${item.year ? `<div class="torrentio-stream-year">${item.year}</div>` : ''}
+        </div>
+      </div>
+    </div>
+    <div class="torrentio-ep-picker">
+      ${!isAnime ? `<label>${t('torrentio.season')}</label><input id="t-season" type="number" min="1" value="1">` : ''}
+      <label>${t('torrentio.episode')}</label><input id="t-episode" type="number" min="1" value="1">
+      <button id="t-go-btn">${t('torrentio.go')}</button>
+    </div>
+    <div id="torrentio-streams-area"></div>
+  `;
+  document.getElementById('torrentio-back-btn').addEventListener('click', () => {
+    renderTorrentioTitles(torrentioTitles, item.type);
+  });
+  document.getElementById('t-go-btn').addEventListener('click', () => {
+    const season = isAnime ? null : parseInt(document.getElementById('t-season').value) || 1;
+    const episode = parseInt(document.getElementById('t-episode').value) || 1;
+    fetchAndRenderTorrentioStreams(item.id, item.type, season, episode, item);
+  });
+}
+
+async function fetchAndRenderTorrentioStreams(id, type, season, episode, item) {
+  const container = type === 'movie'
+    ? document.getElementById('search-results')
+    : document.getElementById('torrentio-streams-area');
+
+  if (type === 'movie') {
+    container.innerHTML = `
+      <div class="torrentio-back">
+        <button id="torrentio-back-btn">${t('torrentio.back')}</button>
+        <div class="torrentio-stream-header-info">
+          ${item.poster ? `<img class="torrentio-stream-poster" src="${item.poster}" alt="">` : ''}
+          <div>
+            <div class="torrentio-stream-title">${item.title}</div>
+            ${item.year ? `<div class="torrentio-stream-year">${item.year}</div>` : ''}
+          </div>
+        </div>
+      </div>
+      <div class="torrentio-loading">${t('torrentio.loadingStreams')}</div>
+    `;
+    document.getElementById('torrentio-back-btn').addEventListener('click', () => {
+      renderTorrentioTitles(torrentioTitles, item.type);
+    });
+  } else {
+    container.innerHTML = `<div class="torrentio-loading">${t('torrentio.loadingStreams')}</div>`;
+  }
+
+  try {
+    const streams = await window.api.torrentioStreams(id, type, season, episode);
+    if (type === 'movie') {
+      const loadingEl = container.querySelector('.torrentio-loading');
+      if (loadingEl) loadingEl.remove();
+    } else {
+      container.innerHTML = '';
+    }
+    if (!streams.length) {
+      container.insertAdjacentHTML('beforeend', `<div class="torrentio-empty">${t('torrentio.noStreams')}</div>`);
+      return;
+    }
+    for (const s of streams) {
+      const row = document.createElement('div');
+      row.className = 'torrentio-stream';
+      const qualityClass = s.quality ? `q-${s.quality.toLowerCase().replace(/[^a-z0-9]/g, '')}` : '';
+      row.innerHTML = `
+        ${s.quality ? `<span class="search-quality ${qualityClass}">${s.quality}</span>` : ''}
+        <span class="torrentio-stream-name" title="${s.fileName}">${s.fileName}</span>
+        ${s.seeders != null ? `<span class="search-seeds ${seedsClass(s.seeders)}">↑ ${s.seeders}</span>` : ''}
+        ${s.size ? `<span class="torrentio-stream-size">${s.size}</span>` : ''}
+      `;
+      row.addEventListener('click', () => doAdd(s.magnet));
+      container.appendChild(row);
+    }
+  } catch {
+    container.innerHTML = `<div class="torrentio-empty">${t('status.networkError')}</div>`;
+  }
+}
+
 async function handleAdd() {
   const input = document.getElementById('magnet-input');
   const val = input.value.trim();
@@ -267,6 +503,8 @@ async function doAdd(source) {
 // --- Render ---
 
 function renderList() {
+  if (!document.getElementById('discover-results').classList.contains('hidden')) return;
+  if (document.getElementById('search-results').classList.contains('expanded')) return;
   const list = document.getElementById('torrent-list');
   const empty = document.getElementById('empty-state');
   empty.classList.toggle('hidden', torrents.length > 0);
@@ -776,7 +1014,7 @@ function populateSettings() {
   document.getElementById('delete-after-play').checked = !!settings.deleteAfterPlay;
   document.getElementById('max-download').value = settings.maxDownload || '';
   document.getElementById('max-upload').value = settings.maxUpload || '';
-  document.getElementById('tmdb-key').value = settings.tmdbApiKey || '';
+  document.getElementById('torrentio-url').value = settings.torrentioUrl || '';
 
   if (settings.player) {
     const match = players.find(p => p.path === settings.player.path);
@@ -813,24 +1051,6 @@ async function browsePlayer() {
   select.value = '__custom__';
 }
 
-async function testTmdb() {
-  const key = document.getElementById('tmdb-key').value.trim();
-  if (!key) { toast(t('toast.tmdbKeyMissing')); return; }
-  const btn = document.getElementById('btn-test-tmdb');
-  btn.disabled = true;
-  btn.textContent = '…';
-  try {
-    const result = await window.api.testTmdb(key);
-    if (result.ok) toast(t('tmdb.ok', { title: result.title, year: result.year, poster: result.poster ? t('tmdb.withPoster') : '' }));
-    else toast(t('tmdb.invalid'));
-  } catch {
-    toast(t('tmdb.networkError'));
-  } finally {
-    btn.disabled = false;
-    btn.textContent = t('btn.test');
-  }
-}
-
 async function saveSettings() {
   const playerPath = document.getElementById('player-path').value.trim();
   const argsStr = document.getElementById('player-args').value.trim();
@@ -839,8 +1059,8 @@ async function saveSettings() {
   const deleteAfterPlay = document.getElementById('delete-after-play').checked;
   const maxDl = parseInt(document.getElementById('max-download').value) || 0;
   const maxUl = parseInt(document.getElementById('max-upload').value) || 0;
-  const tmdbApiKey = document.getElementById('tmdb-key').value.trim();
   const language = document.getElementById('language-select').value;
+  const torrentioUrl = document.getElementById('torrentio-url').value.trim();
 
   settings = {
     ...settings,
@@ -849,8 +1069,8 @@ async function saveSettings() {
     deleteAfterPlay,
     maxDownload: maxDl || null,
     maxUpload: maxUl || null,
-    tmdbApiKey,
     language,
+    torrentioUrl: torrentioUrl || null,
   };
   await window.api.saveSettings(settings);
   toast(t('toast.settingsSaved'));

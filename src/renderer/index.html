@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://*.accel.li https://img.yts.mx https://*.yts.mx https://*.yts1.net https://*.torrentbay.net https://static.tvmaze.com https://cdn.myanimelist.net; connect-src 'self' https://movies-api.accel.li https://api.tvmaze.com https://api.jikan.moe">
   <title>TorrentPlayer</title>
   <link rel="stylesheet" href="style.css">
 </head>
@@ -22,6 +22,7 @@
         <div class="add-tabs">
           <button class="add-tab active" data-tab="magnet" data-i18n="tab.magnet">🔗 Magnet</button>
           <button class="add-tab" data-tab="search" data-i18n="tab.search">🔍 Search</button>
+          <button class="add-tab" data-tab="discover" data-i18n="tab.discover">🎬 Discover</button>
         </div>
         <div class="add-panel" data-panel="magnet">
           <input id="magnet-input" type="text" data-i18n-placeholder="magnet.placeholder" placeholder="Paste a magnet link or drag a .torrent...">
@@ -36,12 +37,20 @@
               <button class="filter-btn active" data-filter="category" data-value="tout" data-i18n="filter.all">All</button>
               <button class="filter-btn" data-filter="category" data-value="films" data-i18n="filter.movies">Movies</button>
               <button class="filter-btn" data-filter="category" data-value="series" data-i18n="filter.series">Series</button>
+              <button class="filter-btn" data-filter="category" data-value="anime" data-i18n="filter.anime">Anime</button>
             </div>
-            <div class="filter-group">
+            <div class="filter-group hidden" id="quality-filter-group">
               <button class="filter-btn active" data-filter="quality" data-value="tout" data-i18n="filter.anyQuality">Any quality</button>
               <button class="filter-btn" data-filter="quality" data-value="1080p">1080p</button>
               <button class="filter-btn" data-filter="quality" data-value="4k">4K</button>
             </div>
+          </div>
+        </div>
+        <div class="add-panel hidden" data-panel="discover">
+          <div class="filter-group">
+            <button class="filter-btn active" data-discover-cat="movies" data-i18n="discover.movies">Movies</button>
+            <button class="filter-btn" data-discover-cat="series" data-i18n="discover.series">Series</button>
+            <button class="filter-btn" data-discover-cat="anime" data-i18n="discover.anime">Anime</button>
           </div>
         </div>
       </div>
@@ -59,6 +68,7 @@
       </div>
 
       <div id="search-results" class="hidden"></div>
+      <div id="discover-results" class="hidden"></div>
 
       <div id="torrent-list"></div>
 
@@ -159,13 +169,12 @@
         </section>
 
         <section>
-          <h2 data-i18n="settings.metadata">Metadata</h2>
+          <h2 data-i18n="settings.torrentio">Torrentio</h2>
           <div class="field-row">
-            <label data-i18n="label.tmdbKey">TMDB key</label>
-            <input id="tmdb-key" type="text" data-i18n-placeholder="tmdb.placeholder" placeholder="API Read Access Token (themoviedb.org)">
-            <button id="btn-test-tmdb" class="btn-secondary" type="button" data-i18n="btn.test">Test</button>
+            <label data-i18n="label.torrentioUrl">URL</label>
+            <input id="torrentio-url" type="text" placeholder="https://torrentio.strem.fun">
           </div>
-          <p class="settings-hint" data-i18n-html="settings.tmdbHint">Free key at <span class="settings-link">themoviedb.org → Settings → API</span></p>
+          <p class="settings-hint" data-i18n-html="settings.torrentioHint">Configure at <span class="settings-link">torrentio.strem.fun</span></p>
         </section>
 
         <div id="settings-actions">

@@ -260,6 +260,16 @@ header button:hover { color: var(--text); background: var(--border); }
   overflow-y: auto;
   flex-shrink: 0;
 }
+#search-results.expanded {
+  flex: 1;
+  max-height: none;
+  min-height: 0;
+  padding: 0 16px 16px;
+}
+#search-results.expanded ~ #torrent-list,
+#search-results.expanded ~ #empty-state {
+  display: none;
+}
 #search-results::-webkit-scrollbar { width: 4px; }
 #search-results::-webkit-scrollbar-track { background: transparent; }
 #search-results::-webkit-scrollbar-thumb { background: var(--border-h); border-radius: 2px; }
@@ -1037,4 +1047,267 @@ section h2 {
   box-shadow: 0 8px 24px rgba(0,0,0,0.4);
 }
 #toast.show { opacity: 1; transform: translateY(0) scale(1); }
+
+/* ── Discover ─────────────────────────────────────────── */
+#discover-results {
+  flex: 1;
+  padding: 12px 16px 16px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-auto-rows: max-content;
+  gap: 12px;
+  overflow-y: auto;
+  align-content: start;
+}
+.discover-card {
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  background: var(--card);
+  border: 1px solid var(--border);
+  transition: transform 0.25s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.2s;
+}
+.discover-card:hover {
+  transform: scale(1.04);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5), 0 0 0 1px rgba(229,9,20,0.3);
+  z-index: 2;
+  position: relative;
+}
+.discover-poster {
+  position: relative;
+  width: 100%;
+  padding-top: 150%;
+  overflow: hidden;
+  background: var(--surface);
+}
+.discover-poster img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.discover-card.no-poster .discover-poster::after {
+  content: '🎬';
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 32px;
+  opacity: 0.25;
+}
+.discover-info {
+  padding: 7px 8px 8px;
+  background: var(--card);
+}
+.discover-title {
+  display: block;
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+.discover-meta {
+  display: block;
+  color: var(--muted-h);
+  font-size: 9px;
+  margin-top: 1px;
+}
+.discover-loading,
+.discover-empty {
+  grid-column: 1 / -1;
+  padding: 32px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+}
 #toast.error { border-color: rgba(239,68,68,0.4); color: #f87171; }
+
+/* ── Torrentio ────────────────────────────────────────── */
+.torrentio-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+  gap: 8px;
+  padding: 10px 0 4px;
+}
+.torrentio-card {
+  cursor: pointer;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--card);
+  border: 1px solid var(--border);
+  transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.2s, border-color 0.2s;
+}
+.torrentio-card:hover {
+  transform: scale(1.04);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.5), 0 0 0 1px rgba(229,9,20,0.3);
+  border-color: rgba(229,9,20,0.4);
+}
+.torrentio-poster {
+  position: relative;
+  width: 100%;
+  padding-top: 150%;
+  background: var(--surface);
+  overflow: hidden;
+}
+.torrentio-poster img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.torrentio-poster-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+  color: var(--muted);
+}
+.torrentio-card-info {
+  padding: 5px 6px 6px;
+}
+.torrentio-card-title {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+.torrentio-card-meta {
+  font-size: 9px;
+  color: var(--muted-h);
+  margin-top: 1px;
+}
+
+.torrentio-back {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 0 12px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 10px;
+}
+.torrentio-back button {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--muted-h);
+  padding: 5px 12px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+  font-family: inherit;
+  transition: all var(--ease);
+  flex-shrink: 0;
+}
+.torrentio-back button:hover { border-color: var(--border-h); color: var(--text); }
+.torrentio-stream-header-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  overflow: hidden;
+}
+.torrentio-stream-poster {
+  width: 36px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.torrentio-stream-title {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.torrentio-stream-year {
+  font-size: 11px;
+  color: var(--muted-h);
+}
+
+.torrentio-ep-picker {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 0 14px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.torrentio-ep-picker label {
+  font-size: 11px;
+  color: var(--muted-h);
+}
+.torrentio-ep-picker input {
+  width: 56px;
+  padding: 5px 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--text);
+  font-size: 12px;
+  font-family: inherit;
+  transition: border-color var(--ease);
+}
+.torrentio-ep-picker input:focus { outline: none; border-color: var(--indigo); }
+.torrentio-ep-picker button {
+  padding: 5px 16px;
+  background: var(--red);
+  border: none;
+  border-radius: 7px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: inherit;
+  transition: background var(--ease), box-shadow var(--ease);
+}
+.torrentio-ep-picker button:hover { background: var(--red-h); box-shadow: 0 4px 14px var(--red-glow); }
+
+.torrentio-stream {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  cursor: pointer;
+  border-radius: 7px;
+  margin-bottom: 3px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  transition: background 0.15s, border-color 0.15s;
+}
+.torrentio-stream:hover {
+  background: var(--card-h);
+  border-color: rgba(229,9,20,0.3);
+}
+.torrentio-stream-name {
+  flex: 1;
+  font-size: 11px;
+  color: var(--muted-h);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.torrentio-stream-size {
+  font-size: 10px;
+  color: var(--muted);
+  flex-shrink: 0;
+  min-width: 52px;
+  text-align: right;
+}
+.torrentio-loading,
+.torrentio-empty {
+  text-align: center;
+  color: var(--muted);
+  padding: 24px;
+  font-size: 13px;
+}
