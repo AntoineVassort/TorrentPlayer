@@ -14,6 +14,9 @@ let discoverCat = 'movies';
 let discoverCache = {};
 let torrentioTitles = [];
 let torrentioCurrentItem = null;
+let torrentioBackFn = null;
+const streamCache = new Map();
+const pendingTorrents = new Map();
 
 // --- Init ---
 
@@ -64,6 +67,7 @@ function bindUI() {
     } else if (tab.dataset.tab === 'search') {
       document.getElementById('discover-results').classList.add('hidden');
     } else if (isDiscover) {
+      torrentioBackFn = null;
       const sr = document.getElementById('search-results');
       sr.classList.add('hidden');
       sr.classList.remove('expanded');
@@ -158,6 +162,18 @@ function bindUI() {
   document.getElementById('history-btn').addEventListener('click', openHistory);
   document.getElementById('history-back-btn').addEventListener('click', closeHistory);
 
+  document.getElementById('detail-back-btn').addEventListener('click', closeDetailView);
+
+  document.getElementById('about-btn').addEventListener('click', openAbout);
+  document.getElementById('about-modal-close').addEventListener('click', closeAbout);
+  document.getElementById('about-modal').addEventListener('click', e => {
+    if (e.target === document.getElementById('about-modal')) closeAbout();
+  });
+  document.getElementById('about-github-link').addEventListener('click', e => {
+    e.preventDefault();
+    window.api.openExternal('https://github.com/AntoineVassort/TorrentPlayer');
+  });
+
   document.getElementById('modal-close').addEventListener('click', closeFilePicker);
   document.getElementById('file-modal').addEventListener('click', e => {
     if (e.target === document.getElementById('file-modal')) closeFilePicker();
@@ -179,6 +195,8 @@ function bindUI() {
     if (!document.getElementById('cast-modal').classList.contains('hidden')) closeCastModal();
     else if (!document.getElementById('file-modal').classList.contains('hidden')) closeFilePicker();
     else if (!document.getElementById('clipboard-banner').classList.contains('hidden')) hideClipboardBanner();
+    else if (!document.getElementById('about-modal').classList.contains('hidden')) closeAbout();
+    else if (!document.getElementById('detail-view').classList.contains('hidden')) closeDetailView();
     else if (!document.getElementById('history-view').classList.contains('hidden')) closeHistory();
     else if (!document.getElementById('settings-view').classList.contains('hidden')) closeSettings();
   });
@@ -222,62 +240,32 @@ function renderDiscoverGrid(items) {
         ${meta ? `<span class="discover-meta">${meta}</span>` : ''}
       </div>
     `;
-    card.addEventListener('click', () => {
-      document.querySelector('[data-tab="search"]').click();
-      document.getElementById('search-input').value = item.title;
-      handleSearch();
-    });
+    if (item.type === 'movie' && item.imdbId) {
+      const overlay = document.createElement('div');
+      overlay.className = 'discover-quality-overlay';
+      card.querySelector('.discover-poster').appendChild(overlay);
+      let fetched = false;
+      card.addEventListener('mouseenter', () => {
+        if (fetched) return;
+        fetched = true;
+        initCardQualityOverlay(item, overlay);
+      });
+    }
+    card.addEventListener('click', () => openDetailView(item));
     grid.appendChild(card);
   }
 }
 
 // --- Add ---
 
-async function handleSearch() {
-  const input = document.getElementById('search-input');
-  const query = input.value.trim();
+function handleSearch() {
+  const query = document.getElementById('search-input').value.trim();
   if (!query) return;
-
   const category = searchFilters.category;
-  if (category === 'tout')   { handleTorrentioSearch(query, 'all');    return; }
-  if (category === 'films')  { handleTorrentioSearch(query, 'movie');  return; }
-  if (category === 'series') { handleTorrentioSearch(query, 'series'); return; }
-  if (category === 'anime')  { handleTorrentioSearch(query, 'anime');  return; }
-
-  const resultsEl = document.getElementById('search-results');
-  resultsEl.classList.remove('hidden');
-  resultsEl.textContent = '';
-
-  const status = document.createElement('div');
-  status.className = 'search-status';
-  status.textContent = t('status.searching');
-  resultsEl.appendChild(status);
-
-  const btn = document.getElementById('search-btn');
-  btn.disabled = true;
-  btn.textContent = '...';
-
-  try {
-    const results = await window.api.searchTorrents(query, searchFilters);
-    resultsEl.textContent = '';
-    if (!results.length) {
-      const el = document.createElement('div');
-      el.className = 'search-status';
-      el.textContent = t('status.noResults');
-      resultsEl.appendChild(el);
-    } else {
-      for (const r of results) resultsEl.appendChild(renderResult(r));
-    }
-  } catch {
-    resultsEl.textContent = '';
-    const el = document.createElement('div');
-    el.className = 'search-status';
-    el.textContent = t('status.networkError');
-    resultsEl.appendChild(el);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = t('btn.search');
-  }
+  if (category === 'films')  return handleTorrentioSearch(query, 'movie');
+  if (category === 'series') return handleTorrentioSearch(query, 'series');
+  if (category === 'anime')  return handleTorrentioSearch(query, 'anime');
+  handleTorrentioSearch(query, 'all');
 }
 
 function extractQuality(name) {
@@ -329,6 +317,89 @@ function renderResult(r) {
 }
 
 // --- Torrentio ---
+
+function torrentioGoBack(type) {
+  if (torrentioBackFn) {
+    const fn = torrentioBackFn;
+    torrentioBackFn = null;
+    fn();
+  } else {
+    renderTorrentioTitles(torrentioTitles, type);
+  }
+}
+
+function closeDetailView() {
+  document.getElementById('detail-view').classList.add('hidden');
+  document.getElementById('main-view').classList.remove('hidden');
+}
+
+function openDetailView(item) {
+  document.getElementById('main-view').classList.add('hidden');
+  document.getElementById('detail-view').classList.remove('hidden');
+
+  const posterUrl = item.posterUrl || null;
+  const bg = document.getElementById('detail-hero-bg');
+  bg.style.backgroundImage = posterUrl ? `url("${posterUrl}")` : '';
+  const posterImg = document.getElementById('detail-poster-img');
+  if (posterUrl) {
+    posterImg.src = posterUrl;
+    posterImg.style.display = '';
+  } else {
+    posterImg.style.display = 'none';
+  }
+  document.getElementById('detail-title-text').textContent = item.title;
+  const parts = [item.year, item.rating ? `★ ${item.rating}` : null].filter(Boolean);
+  document.getElementById('detail-meta-text').textContent = parts.join(' · ');
+
+  document.getElementById('detail-ep-picker').classList.add('hidden');
+  document.getElementById('detail-streams-area').innerHTML = '';
+
+  if (item.imdbId) {
+    if (item.type === 'movie') {
+      fetchAndRenderDetailStreams(item.imdbId, 'movie', null, null);
+    } else {
+      setupDetailEpPicker({ id: item.imdbId, type: item.type });
+    }
+  } else {
+    const area = document.getElementById('detail-streams-area');
+    area.innerHTML = `<div class="torrentio-loading">${t('status.searching')}</div>`;
+    window.api.torrentioSearch(item.title, 'anime').then(results => {
+      area.innerHTML = '';
+      if (results.length) setupDetailEpPicker(results[0]);
+      else area.innerHTML = `<div class="torrentio-empty">${t('status.noResults')}</div>`;
+    }).catch(() => {
+      area.innerHTML = `<div class="torrentio-empty">${t('status.networkError')}</div>`;
+    });
+  }
+}
+
+function setupDetailEpPicker(item) {
+  const isAnime = item.type === 'anime';
+  document.getElementById('detail-season-group').classList.toggle('hidden', isAnime);
+  document.getElementById('detail-ep-picker').classList.remove('hidden');
+
+  const oldBtn = document.getElementById('detail-go-btn');
+  const newBtn = oldBtn.cloneNode(true);
+  oldBtn.replaceWith(newBtn);
+  newBtn.addEventListener('click', () => {
+    const season = isAnime ? null : parseInt(document.getElementById('detail-season').value) || 1;
+    const episode = parseInt(document.getElementById('detail-episode').value) || 1;
+    fetchAndRenderDetailStreams(item.id, item.type, season, episode);
+  });
+}
+
+async function fetchAndRenderDetailStreams(id, type, season, episode) {
+  const container = document.getElementById('detail-streams-area');
+  container.innerHTML = `<div class="torrentio-loading">${t('torrentio.loadingStreams')}</div>`;
+  try {
+    const streams = await window.api.torrentioStreams(id, type, season, episode);
+    container.innerHTML = '';
+    renderQualityShortcuts(container, streams);
+    renderStreamRows(container, streams);
+  } catch {
+    container.innerHTML = `<div class="torrentio-empty">${t('status.networkError')}</div>`;
+  }
+}
 
 async function handleTorrentioSearch(query, type) {
   torrentioTitles = [];
@@ -412,14 +483,125 @@ function renderTorrentioEpPicker(item) {
     </div>
     <div id="torrentio-streams-area"></div>
   `;
-  document.getElementById('torrentio-back-btn').addEventListener('click', () => {
-    renderTorrentioTitles(torrentioTitles, item.type);
-  });
+  document.getElementById('torrentio-back-btn').addEventListener('click', () => torrentioGoBack(item.type));
   document.getElementById('t-go-btn').addEventListener('click', () => {
     const season = isAnime ? null : parseInt(document.getElementById('t-season').value) || 1;
     const episode = parseInt(document.getElementById('t-episode').value) || 1;
     fetchAndRenderTorrentioStreams(item.id, item.type, season, episode, item);
   });
+}
+
+function pickBestStream(streams, tier) {
+  const test = {
+    '4K':    s => /2160p|4k|uhd/i.test(s.quality),
+    '1080p': s => /1080/i.test(s.quality),
+    '720p':  s => /720p/i.test(s.quality),
+    '480p':  s => /480p/i.test(s.quality),
+  }[tier];
+  if (!test) return null;
+  const candidates = streams.filter(s => !s.debrid && s.magnet && test(s));
+  if (!candidates.length) return null;
+  return candidates.reduce((best, s) => (s.seeders ?? 0) > (best.seeders ?? 0) ? s : best);
+}
+
+const QUALITY_REGEX = {
+  '4K':    /2160p|4k|uhd/i,
+  '1080p': /1080/i,
+  '720p':  /720p/i,
+  '480p':  /480p/i,
+};
+
+function renderQualityShortcuts(container, streams) {
+  const available = ['4K', '1080p', '720p', '480p'].filter(t => pickBestStream(streams, t));
+  if (!available.length) return;
+
+  const bar = document.createElement('div');
+  bar.className = 'quality-shortcuts';
+
+  const allBtn = document.createElement('button');
+  allBtn.className = 'quality-shortcut-btn active';
+  allBtn.dataset.tier = 'all';
+  allBtn.textContent = 'All';
+  bar.appendChild(allBtn);
+
+  for (const tier of available) {
+    const btn = document.createElement('button');
+    btn.className = 'quality-shortcut-btn';
+    btn.dataset.tier = tier;
+    btn.textContent = tier;
+    bar.appendChild(btn);
+  }
+
+  container.prepend(bar);
+
+  bar.addEventListener('click', e => {
+    const btn = e.target.closest('.quality-shortcut-btn');
+    if (!btn) return;
+    bar.querySelectorAll('.quality-shortcut-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const tier = btn.dataset.tier;
+    container.querySelectorAll('.torrentio-stream').forEach(row => {
+      if (tier === 'all') { row.style.display = ''; return; }
+      const quality = row.querySelector('.search-quality')?.textContent || '';
+      row.style.display = QUALITY_REGEX[tier]?.test(quality) ? '' : 'none';
+    });
+  });
+}
+
+async function initCardQualityOverlay(item, overlay) {
+  if (!streamCache.has(item.imdbId)) {
+    overlay.innerHTML = '<span class="dq-loading">· · ·</span>';
+    try {
+      const streams = await window.api.torrentioStreams(item.imdbId, 'movie', null, null);
+      streamCache.set(item.imdbId, streams);
+    } catch {
+      streamCache.set(item.imdbId, []);
+    }
+  }
+  const streams = streamCache.get(item.imdbId);
+  overlay.innerHTML = '';
+  let hasAny = false;
+  for (const tier of ['4K', '1080p', '720p', '480p']) {
+    const best = pickBestStream(streams, tier);
+    if (!best) continue;
+    hasAny = true;
+    const btn = document.createElement('button');
+    btn.className = 'dq-btn';
+    btn.textContent = tier;
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      document.querySelector('.add-tab[data-tab="magnet"]').click();
+      doAdd(best.magnet);
+    });
+    overlay.appendChild(btn);
+  }
+  if (!hasAny) overlay.remove();
+}
+
+function renderStreamRows(container, streams) {
+  if (!streams.length) {
+    container.insertAdjacentHTML('beforeend', `<div class="torrentio-empty">${t('torrentio.noStreams')}</div>`);
+    return;
+  }
+  const playable = streams.filter(s => !s.debrid);
+  const debridOnly = streams.filter(s => s.debrid);
+  for (const s of streams) {
+    const row = document.createElement('div');
+    row.className = s.debrid ? 'torrentio-stream torrentio-stream-debrid' : 'torrentio-stream';
+    const qualityClass = s.quality ? `q-${s.quality.toLowerCase().replace(/[^a-z0-9]/g, '')}` : '';
+    row.innerHTML = `
+      ${s.quality ? `<span class="search-quality ${qualityClass}">${s.quality}</span>` : ''}
+      <span class="torrentio-stream-name" title="${s.fileName}">${s.fileName}</span>
+      ${s.debrid ? '<span class="torrentio-debrid-badge">🔒 Debrid</span>' : ''}
+      ${!s.debrid && s.seeders != null ? `<span class="search-seeds ${seedsClass(s.seeders)}">↑ ${s.seeders}</span>` : ''}
+      ${s.size ? `<span class="torrentio-stream-size">${s.size}</span>` : ''}
+    `;
+    if (!s.debrid) row.addEventListener('click', () => doAdd(s.magnet));
+    container.appendChild(row);
+  }
+  if (debridOnly.length && !playable.length) {
+    container.insertAdjacentHTML('beforeend', `<div class="torrentio-debrid-note">🔒 Ces streams nécessitent un compte Debrid (RealDebrid, AllDebrid…) — configure ton URL Torrentio dans les paramètres.</div>`);
+  }
 }
 
 async function fetchAndRenderTorrentioStreams(id, type, season, episode, item) {
@@ -441,9 +623,7 @@ async function fetchAndRenderTorrentioStreams(id, type, season, episode, item) {
       </div>
       <div class="torrentio-loading">${t('torrentio.loadingStreams')}</div>
     `;
-    document.getElementById('torrentio-back-btn').addEventListener('click', () => {
-      renderTorrentioTitles(torrentioTitles, item.type);
-    });
+    document.getElementById('torrentio-back-btn').addEventListener('click', () => torrentioGoBack(item.type));
   } else {
     container.innerHTML = `<div class="torrentio-loading">${t('torrentio.loadingStreams')}</div>`;
   }
@@ -451,28 +631,11 @@ async function fetchAndRenderTorrentioStreams(id, type, season, episode, item) {
   try {
     const streams = await window.api.torrentioStreams(id, type, season, episode);
     if (type === 'movie') {
-      const loadingEl = container.querySelector('.torrentio-loading');
-      if (loadingEl) loadingEl.remove();
+      container.querySelector('.torrentio-loading')?.remove();
     } else {
       container.innerHTML = '';
     }
-    if (!streams.length) {
-      container.insertAdjacentHTML('beforeend', `<div class="torrentio-empty">${t('torrentio.noStreams')}</div>`);
-      return;
-    }
-    for (const s of streams) {
-      const row = document.createElement('div');
-      row.className = 'torrentio-stream';
-      const qualityClass = s.quality ? `q-${s.quality.toLowerCase().replace(/[^a-z0-9]/g, '')}` : '';
-      row.innerHTML = `
-        ${s.quality ? `<span class="search-quality ${qualityClass}">${s.quality}</span>` : ''}
-        <span class="torrentio-stream-name" title="${s.fileName}">${s.fileName}</span>
-        ${s.seeders != null ? `<span class="search-seeds ${seedsClass(s.seeders)}">↑ ${s.seeders}</span>` : ''}
-        ${s.size ? `<span class="torrentio-stream-size">${s.size}</span>` : ''}
-      `;
-      row.addEventListener('click', () => doAdd(s.magnet));
-      container.appendChild(row);
-    }
+    renderStreamRows(container, streams);
   } catch {
     container.innerHTML = `<div class="torrentio-empty">${t('status.networkError')}</div>`;
   }
@@ -491,11 +654,24 @@ async function handleAdd() {
 }
 
 async function doAdd(source) {
+  const pid = 'pending-' + Date.now();
+  pendingTorrents.set(pid, {
+    id: pid, name: t('card.buffering'), connecting: true,
+    size: 0, downloaded: 0, progress: 0,
+    downloadSpeed: 0, uploadSpeed: 0, numPeers: 0,
+    done: false, paused: false, ready: false,
+    timeRemaining: null, hasSubtitle: false,
+    speedHistory: [], playback: null, resumePos: null,
+    port: null, meta: null, queuePos: -1, casting: null, videoFiles: [],
+  });
+  renderList();
   try {
     const r = await window.api.addTorrent(source);
+    pendingTorrents.delete(pid);
     toast(t('toast.added', { name: r.name }));
     if (r.videoFiles?.length > 1) openFilePicker(r.id, r.videoFiles);
   } catch (err) {
+    pendingTorrents.delete(pid);
     toast(err.message, true);
   }
 }
@@ -503,16 +679,18 @@ async function doAdd(source) {
 // --- Render ---
 
 function renderList() {
+  if (!document.getElementById('detail-view').classList.contains('hidden')) return;
   if (!document.getElementById('discover-results').classList.contains('hidden')) return;
   if (document.getElementById('search-results').classList.contains('expanded')) return;
   const list = document.getElementById('torrent-list');
   const empty = document.getElementById('empty-state');
-  empty.classList.toggle('hidden', torrents.length > 0);
+  const allItems = [...torrents, ...pendingTorrents.values()];
+  empty.classList.toggle('hidden', allItems.length > 0);
 
   for (const card of [...list.querySelectorAll('.card')]) {
-    if (!torrents.find(t => t.id === card.dataset.id)) card.remove();
+    if (!allItems.find(t => t.id === card.dataset.id)) card.remove();
   }
-  for (const t of torrents) {
+  for (const t of allItems) {
     const existing = list.querySelector(`[data-id="${t.id}"]`);
     if (existing) updateCard(existing, t);
     else list.appendChild(createCard(t));
@@ -565,18 +743,18 @@ function speedGraph(history) {
   return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 }
 
-function createCard(t) {
+function createCard(torrent) {
   const card = document.createElement('div');
   card.className = 'card';
-  card.dataset.id = t.id;
+  card.dataset.id = torrent.id;
   card.innerHTML = `
     <img class="card-poster hidden" alt="">
     <div class="card-body">
       <div class="card-top">
         <span class="drag-handle" title="${t('drag.handle')}">⠿</span>
-        <span class="card-name" title="${t.name}">${t.name}</span>
+        <span class="card-name" title="${torrent.name}">${torrent.name}</span>
         <span class="queue-badge hidden"></span>
-        <span class="card-size">${fmtSize(t.size)}</span>
+        <span class="card-size">${fmtSize(torrent.size)}</span>
       </div>
       <div class="progress-bar"><div class="progress-fill"></div></div>
       <div class="card-stats">
@@ -591,7 +769,7 @@ function createCard(t) {
       <div class="playback-bar hidden"></div>
       <div class="card-actions">
         <button class="btn-files hidden" title="${t('btn.chooseFile')}">📂</button>
-        <button class="btn-play">${t('card.play')}</button>
+        <button class="btn-play">${torrent.connecting ? t('card.buffering') : t('card.play')}</button>
         <button class="btn-local hidden">${t('card.playLocal')}</button>
         <button class="btn-cast hidden">📺</button>
         <button class="btn-seed hidden">⏸ Seeding</button>
@@ -600,21 +778,30 @@ function createCard(t) {
     </div>
   `;
 
-  card.querySelector('.btn-play').addEventListener('click', () => play(t.id));
-  card.querySelector('.btn-local').addEventListener('click', () => playLocal(t.id));
-  card.querySelector('.btn-cast').addEventListener('click', () => openCastPicker(t.id));
-  card.querySelector('.btn-seed').addEventListener('click', () => stopSeed(t.id));
-  card.querySelector('.btn-remove').addEventListener('click', () => remove(t.id, card));
+  if (torrent.connecting) card.querySelector('.btn-play').classList.add('buffering');
+
+  card.querySelector('.btn-play').addEventListener('click', () => play(torrent.id));
+  card.querySelector('.btn-local').addEventListener('click', () => playLocal(torrent.id));
+  card.querySelector('.btn-cast').addEventListener('click', () => openCastPicker(torrent.id));
+  card.querySelector('.btn-seed').addEventListener('click', () => stopSeed(torrent.id));
+  card.querySelector('.btn-remove').addEventListener('click', () => {
+    if (pendingTorrents.has(torrent.id)) {
+      pendingTorrents.delete(torrent.id);
+      renderList();
+      return;
+    }
+    remove(torrent.id, card);
+  });
   card.querySelector('.btn-files').addEventListener('click', () => {
-    const state = torrents.find(x => x.id === t.id);
-    if (state?.videoFiles?.length > 1) openFilePicker(t.id, state.videoFiles);
+    const state = torrents.find(x => x.id === torrent.id);
+    if (state?.videoFiles?.length > 1) openFilePicker(torrent.id, state.videoFiles);
   });
 
   // Drag-and-drop for queue reordering
   card.draggable = true;
   card.addEventListener('dragstart', e => {
     if (!e.dataTransfer.types.includes('Files')) {
-      e.dataTransfer.setData('text/plain', t.id);
+      e.dataTransfer.setData('text/plain', torrent.id);
       e.dataTransfer.effectAllowed = 'move';
       setTimeout(() => card.classList.add('dragging'), 0);
     }
@@ -633,7 +820,7 @@ function createCard(t) {
     e.preventDefault();
     card.classList.remove('drag-over');
     const fromId = e.dataTransfer.getData('text/plain');
-    if (!fromId || fromId === t.id) return;
+    if (!fromId || fromId === torrent.id) return;
 
     const list = document.getElementById('torrent-list');
     const fromCard = list.querySelector(`[data-id="${fromId}"]`);
@@ -649,85 +836,87 @@ function createCard(t) {
     window.api.reorderQueue(newOrder);
   });
 
-  updateCard(card, t);
+  updateCard(card, torrent);
   return card;
 }
 
-function updateCard(card, t) {
+function updateCard(card, torrent) {
+  if (torrent.connecting) return;
+
   // Poster
   const poster = card.querySelector('.card-poster');
-  if (t.meta?.poster) {
-    poster.src = t.meta.poster;
+  if (torrent.meta?.poster) {
+    poster.src = torrent.meta.poster;
     poster.classList.remove('hidden');
   } else {
     poster.classList.add('hidden');
   }
 
-  const pct = (t.progress * 100).toFixed(1);
+  const pct = (torrent.progress * 100).toFixed(1);
   card.querySelector('.progress-fill').style.width = `${pct}%`;
-  card.querySelector('.progress-fill').classList.toggle('done', t.done);
-  card.querySelector('.pct').textContent = t.done ? t('card.done') : `${pct}%`;
-  card.querySelector('.downloaded').textContent = t.done ? '' : fmtSize(t.downloaded);
-  card.querySelector('.eta').textContent = t.done ? '' : fmtETA(t.timeRemaining);
-  card.querySelector('.dl').textContent = t.done ? '' : `↓ ${fmt(t.downloadSpeed)}`;
+  card.querySelector('.progress-fill').classList.toggle('done', torrent.done);
+  card.querySelector('.pct').textContent = torrent.done ? t('card.done') : `${pct}%`;
+  card.querySelector('.downloaded').textContent = torrent.done ? '' : fmtSize(torrent.downloaded);
+  card.querySelector('.eta').textContent = torrent.done ? '' : fmtETA(torrent.timeRemaining);
+  card.querySelector('.dl').textContent = torrent.done ? '' : `↓ ${fmt(torrent.downloadSpeed)}`;
 
   // Peers — show upload when done + seeding
   const peersEl = card.querySelector('.peers');
-  if (t.done && !t.paused && t.uploadSpeed > 0) {
-    peersEl.textContent = `↑ ${fmt(t.uploadSpeed)} · ${t.numPeers}p`;
+  if (torrent.done && !torrent.paused && torrent.uploadSpeed > 0) {
+    peersEl.textContent = `↑ ${fmt(torrent.uploadSpeed)} · ${torrent.numPeers}p`;
   } else {
-    peersEl.textContent = `${t.numPeers} peers`;
+    peersEl.textContent = `${torrent.numPeers} peers`;
   }
 
-  card.querySelector('.sub-badge').classList.toggle('hidden', !t.hasSubtitle);
-  card.querySelector('.graph').innerHTML = t.done ? '' : speedGraph(t.speedHistory);
+  card.querySelector('.sub-badge').classList.toggle('hidden', !torrent.hasSubtitle);
+  card.querySelector('.graph').innerHTML = torrent.done ? '' : speedGraph(torrent.speedHistory);
 
   // Queue badge
   const badge = card.querySelector('.queue-badge');
   const showQueue = torrents.filter(x => !x.done).length > 1;
-  if (showQueue && t.queuePos >= 0 && !t.done) {
-    badge.textContent = `#${t.queuePos + 1}`;
+  if (showQueue && torrent.queuePos >= 0 && !torrent.done) {
+    badge.textContent = `#${torrent.queuePos + 1}`;
     badge.classList.remove('hidden');
-    badge.classList.toggle('queue-badge-first', t.queuePos === 0);
+    badge.classList.toggle('queue-badge-first', torrent.queuePos === 0);
   } else {
     badge.classList.add('hidden');
   }
 
   const filesBtn = card.querySelector('.btn-files');
-  filesBtn.classList.toggle('hidden', !t.videoFiles?.length);
+  filesBtn.classList.toggle('hidden', !torrent.videoFiles?.length);
 
   const localBtn = card.querySelector('.btn-local');
-  localBtn.classList.toggle('hidden', !t.done);
+  localBtn.classList.toggle('hidden', !torrent.done);
 
   const castBtn = card.querySelector('.btn-cast');
-  castBtn.classList.toggle('hidden', !t.ready);
+  castBtn.classList.toggle('hidden', !torrent.ready);
 
   const seedBtn = card.querySelector('.btn-seed');
-  seedBtn.classList.toggle('hidden', !t.done);
-  if (t.done) {
-    seedBtn.textContent = t.paused ? t('card.seeder') : t('card.seeding');
-    seedBtn.classList.toggle('active', !t.paused);
+  seedBtn.classList.toggle('hidden', !torrent.done);
+  if (torrent.done) {
+    seedBtn.textContent = torrent.paused ? t('card.seeder') : t('card.seeding');
+    seedBtn.classList.toggle('active', !torrent.paused);
   }
 
   // Playback / casting bar
   const playbackBar = card.querySelector('.playback-bar');
-  if (t.casting) {
-    playbackBar.textContent = t('cast.inProgress', { name: t.casting });
+  if (torrent.casting) {
+    playbackBar.textContent = t('cast.inProgress', { name: torrent.casting });
     playbackBar.classList.remove('hidden');
-  } else if (t.playback) {
-    const dur = t.playback.duration > 0 ? ` / ${fmtTime(t.playback.duration)}` : '';
-    playbackBar.textContent = t('card.playing', { pos: fmtTime(t.playback.pos), dur });
+  } else if (torrent.playback) {
+    const dur = torrent.playback.duration > 0 ? ` / ${fmtTime(torrent.playback.duration)}` : '';
+    playbackBar.textContent = t('card.playing', { pos: fmtTime(torrent.playback.pos), dur });
     playbackBar.classList.remove('hidden');
   } else {
     playbackBar.classList.add('hidden');
   }
 
   const playBtn = card.querySelector('.btn-play');
-  if (!t.ready) {
+  if (!torrent.ready) {
     playBtn.textContent = t('card.buffering');
     playBtn.classList.add('buffering');
-  } else if (t.resumePos > 5) {
-    playBtn.textContent = `↩ ${fmtTime(t.resumePos)}`;
+  } else if (torrent.resumePos > 5) {
+    playBtn.textContent = `↩ ${fmtTime(torrent.resumePos)}`;
     playBtn.classList.remove('buffering');
   } else {
     playBtn.textContent = t('card.play');
@@ -988,6 +1177,18 @@ function showClipboardBanner(magnet) {
 function hideClipboardBanner() {
   document.getElementById('clipboard-banner').classList.add('hidden');
   pendingClipboardMagnet = null;
+}
+
+// --- About ---
+
+async function openAbout() {
+  const version = await window.api.getVersion();
+  document.getElementById('about-version').textContent = `v${version}`;
+  document.getElementById('about-modal').classList.remove('hidden');
+}
+
+function closeAbout() {
+  document.getElementById('about-modal').classList.add('hidden');
 }
 
 // --- Settings ---

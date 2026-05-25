@@ -9,7 +9,6 @@ export function getDefaults(userDataPath) {
     downloadDir: path.join(userDataPath, 'downloads'),
     deleteAfterPlay: false,
     windowBounds: null,
-    tmdbApiKey: '',
     language: 'en',
   };
 }

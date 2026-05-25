@@ -20,7 +20,6 @@ contextBridge.exposeInMainWorld('api', {
   openTorrentDialog: ()           => ipcRenderer.invoke('dialog:torrent'),
   openPlayerDialog:  ()           => ipcRenderer.invoke('dialog:player'),
   openDirDialog:     ()           => ipcRenderer.invoke('dialog:directory'),
-  searchTorrents:    (query, opts) => ipcRenderer.invoke('search:query', query, opts),
   discoverFetch:     (cat)        => ipcRenderer.invoke('discover:fetch', cat),
   torrentioSearch:   (query, type)                  => ipcRenderer.invoke('torrentio:search', query, type),
   torrentioStreams:  (id, type, season, episode)     => ipcRenderer.invoke('torrentio:streams', id, type, season, episode),
@@ -35,4 +34,6 @@ contextBridge.exposeInMainWorld('api', {
   onUnmaximize:      (cb)         => ipcRenderer.on('window:unmaximize', () => cb(false)),
   onUpdateAvailable: (cb)         => ipcRenderer.on('update:available',  (_, data) => cb(data)),
   openRelease:       (url)        => ipcRenderer.send('update:openRelease', url),
+  getVersion:        ()           => ipcRenderer.invoke('app:version'),
+  openExternal:      (url)        => ipcRenderer.send('app:openExternal', url),
 });

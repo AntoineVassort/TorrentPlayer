@@ -134,7 +134,7 @@ header button:hover { color: var(--text); background: var(--border); }
 #btn-close:hover { background: var(--danger) !important; color: #fff !important; }
 
 /* ── Views ───────────────────────────────────────────── */
-#main-view, #settings-view, #history-view {
+#main-view, #settings-view, #history-view, #detail-view {
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -1310,4 +1310,288 @@ section h2 {
   color: var(--muted);
   padding: 24px;
   font-size: 13px;
+}
+/* ── About modal ─────────────────────────────────────── */
+.about-modal { width: 320px; }
+.about-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 28px 24px 24px;
+  gap: 8px;
+  text-align: center;
+}
+.about-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  margin-bottom: 4px;
+}
+.about-name {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: 0.3px;
+}
+.about-version {
+  font-size: 12px;
+  color: var(--muted-h);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 2px 10px;
+  border-radius: 20px;
+}
+.about-desc {
+  font-size: 12px;
+  color: var(--muted-h);
+  line-height: 1.6;
+  max-width: 240px;
+  margin-top: 4px;
+}
+.about-github {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 8px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all var(--ease);
+}
+.about-github:hover {
+  border-color: var(--indigo);
+  color: var(--indigo-h);
+  background: var(--indigo-dim);
+}
+.about-license {
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.torrentio-stream-debrid {
+  opacity: 0.4;
+  cursor: default;
+}
+.torrentio-stream-debrid:hover {
+  background: var(--card);
+  border-color: var(--border);
+}
+.torrentio-debrid-badge {
+  font-size: 10px;
+  color: var(--muted-h);
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.torrentio-debrid-note {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: rgba(99,102,241,0.08);
+  border: 1px solid rgba(99,102,241,0.2);
+  border-radius: 7px;
+  font-size: 11px;
+  color: var(--muted-h);
+  line-height: 1.5;
+}
+
+/* ── Discover card quality overlay ───────────────────── */
+.discover-quality-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(8,8,16,0.95) 0%, rgba(8,8,16,0.55) 55%, transparent 100%);
+  opacity: 0;
+  transition: opacity 0.18s;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-content: end;
+  padding: 6px;
+  gap: 4px;
+  pointer-events: none;
+}
+.discover-card:hover .discover-quality-overlay {
+  opacity: 1;
+  pointer-events: all;
+}
+.dq-btn {
+  background: rgba(8,8,16,0.78);
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 9px;
+  font-weight: 700;
+  padding: 4px 2px;
+  cursor: pointer;
+  transition: background 0.14s, border-color 0.14s, color 0.14s;
+  font-family: inherit;
+  letter-spacing: 0.3px;
+  text-align: center;
+}
+.dq-btn:hover {
+  background: var(--red);
+  border-color: var(--red-h);
+  color: #fff;
+}
+.dq-btn:active { transform: scale(0.95); }
+.dq-btn.loading { opacity: 0.5; cursor: default; }
+.dq-loading {
+  grid-column: 1 / -1;
+  text-align: center;
+  color: var(--muted-h);
+  font-size: 12px;
+  align-self: end;
+  padding-bottom: 6px;
+  letter-spacing: 3px;
+}
+
+/* ── Quality shortcuts bar (detail view + search) ───── */
+.quality-shortcuts {
+  display: flex;
+  gap: 6px;
+  padding: 10px 12px 8px;
+  flex-shrink: 0;
+}
+.quality-shortcut-btn {
+  padding: 5px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--muted-h);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.14s, border-color 0.14s, color 0.14s;
+  font-family: inherit;
+  letter-spacing: 0.2px;
+}
+.quality-shortcut-btn:not(:disabled):hover,
+.quality-shortcut-btn.active {
+  background: var(--red-dim);
+  border-color: rgba(229,9,20,0.5);
+  color: #ff6b6b;
+}
+.quality-shortcut-btn:disabled {
+  opacity: 0.28;
+  cursor: default;
+}
+
+/* ── Detail view (from Discover) ─────────────────────── */
+#detail-hero {
+  position: relative;
+  height: 180px;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+#detail-hero-bg {
+  position: absolute;
+  inset: -30px;
+  background-size: cover;
+  background-position: center top;
+  filter: blur(28px) brightness(0.28) saturate(1.5);
+}
+
+#detail-hero-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  padding: 16px;
+  height: 100%;
+  background: linear-gradient(to top, var(--bg) 0%, rgba(8,8,16,0.45) 55%, transparent 100%);
+}
+
+#detail-poster-img {
+  width: 88px;
+  height: 132px;
+  object-fit: cover;
+  border-radius: 7px;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.85);
+  flex-shrink: 0;
+}
+
+.detail-poster-empty {
+  width: 88px;
+  height: 132px;
+  border-radius: 7px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+#detail-info {
+  flex: 1;
+  min-width: 0;
+  padding-bottom: 2px;
+}
+
+#detail-title-text {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.3;
+  margin-bottom: 6px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+#detail-meta-text {
+  font-size: 13px;
+  color: var(--muted-h);
+}
+
+#detail-ep-picker {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+#detail-ep-picker label {
+  font-size: 13px;
+  color: var(--muted-h);
+  white-space: nowrap;
+}
+
+#detail-season-group {
+  display: contents;
+}
+
+#detail-season-group.hidden {
+  display: none !important;
+}
+
+#detail-ep-picker input[type="number"] {
+  width: 56px;
+  padding: 5px 8px;
+  font-size: 13px;
+  text-align: center;
+}
+
+#detail-streams-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 0;
+}
+
+#detail-streams-area .torrentio-loading,
+#detail-streams-area .torrentio-empty {
+  padding: 32px 16px;
 }
