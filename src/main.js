@@ -8,7 +8,6 @@ import { spawn } from 'child_process';
 import WebTorrent from 'webtorrent';
 import { detect } from './playerDetector.js';
 import { getSettings, saveSettings } from './settings.js';
-import { searchTorrents } from './torrentSearch.js';
 import { addEntry, loadHistory, removeEntry, updateEntry } from './history.js';
 import { discoverDevices, castMedia, getLocalIP } from './chromecast.js';
 
@@ -251,7 +250,8 @@ function addTorrentInternal(torrentId, magnet, downloadDir, resumePos = null) {
   return new Promise((resolve, reject) => {
     const opts = downloadDir ? { path: downloadDir } : {};
 
-    client.add(torrentId, opts, (torrent) => {
+    const pending = client.add(torrentId, opts, (torrent) => {
+      clearTimeout(timer);
       if (active.has(torrent.infoHash)) {
         return resolve({ id: torrent.infoHash, name: torrent.name, videoFiles: [] });
       }
@@ -323,6 +323,11 @@ function addTorrentInternal(torrentId, magnet, downloadDir, resumePos = null) {
       };
       tryListen(8888);
     });
+
+    const timer = setTimeout(() => {
+      try { client.remove(pending); } catch {}
+      reject(new Error('Aucun peer trouvé (timeout 60s). Essayez un autre stream.'));
+    }, 60000);
   });
 }
 
@@ -597,6 +602,8 @@ ipcMain.handle('cast:play', async (_, id, host) => {
 });
 
 ipcMain.on('update:openRelease', (_, url) => shell.openExternal(url));
+ipcMain.handle('app:version', () => app.getVersion());
+ipcMain.on('app:openExternal', (_, url) => shell.openExternal(url));
 
 ipcMain.handle('settings:get', () => getSettings(app.getPath('userData')));
 
@@ -619,6 +626,8 @@ ipcMain.handle('dialog:torrent', async () => {
 ipcMain.handle('dialog:player', async () => {
   const filters = process.platform === 'win32'
     ? [{ name: 'Exécutables', extensions: ['exe'] }]
+    : process.platform === 'darwin'
+    ? [{ name: 'Applications', extensions: ['app', '*'] }]
     : [{ name: 'Tous les fichiers', extensions: ['*'] }];
   const r = await dialog.showOpenDialog(mainWindow, { filters, properties: ['openFile'] });
   return r.canceled ? null : r.filePaths[0];
@@ -629,7 +638,6 @@ ipcMain.handle('dialog:directory', async () => {
   return r.canceled ? null : r.filePaths[0];
 });
 
-ipcMain.handle('search:query', async (_, query, options) => searchTorrents(query, options));
 
 async function fetchItunesPoster(title, year, kind = 'movie') {
   try {
@@ -697,27 +705,17 @@ ipcMain.handle('discover:fetch', async (_, cat) => {
   const opts = { signal: AbortSignal.timeout(8000) };
   try {
     if (cat === 'movies') {
-      const mirrors = [
-        'https://movies-api.accel.li',
-        'https://yts.mx',
-        'https://yts.torrentbay.net',
-        'https://yts1.net',
-      ];
-      for (const mirror of mirrors) {
-        try {
-          console.log('[discover] movies: trying', mirror);
-          const res = await fetch(`${mirror}/api/v2/list_movies.json?sort_by=download_count&limit=24&minimum_rating=6`, opts);
-          const data = await res.json();
-          const movies = data?.data?.movies || [];
-          console.log('[discover] movies: got', movies.length, 'items, first image:', movies[0]?.medium_cover_image);
-          if (movies.length) return await Promise.all(movies.map(async m => ({
-            title: m.title, year: m.year, rating: m.rating,
-            posterUrl: await fetchImgBase64(m.medium_cover_image)
-                    || await fetchItunesPoster(m.title, m.year, 'movie'),
-          })));
-        } catch (e) { console.log('[discover] movies: mirror failed', mirror, e.message); }
-      }
-      return [];
+      const res = await fetch('https://v3-cinemeta.strem.io/catalog/movie/top.json', opts);
+      const data = await res.json();
+      const movies = (data.metas || []).slice(0, 24);
+      return await Promise.all(movies.map(async m => ({
+        title: m.name,
+        year: m.year || null,
+        rating: m.imdbRating || null,
+        imdbId: m.id || null,
+        type: 'movie',
+        posterUrl: await fetchImgBase64(m.poster || null),
+      })));
     }
     if (cat === 'series') {
       const today = new Date().toISOString().split('T')[0];
@@ -733,6 +731,7 @@ ipcMain.handle('discover:fetch', async (_, cat) => {
           title: show.name,
           year: show.premiered ? show.premiered.slice(0, 4) : null,
           rating: show.rating?.average || null,
+          imdbId: show.externals?.imdb || null, type: 'series',
           posterUrl: show.image.medium,
         });
       }
@@ -757,6 +756,24 @@ ipcMain.handle('discover:fetch', async (_, cat) => {
   } catch { /* network blocked or timeout — return empty */ }
   return [];
 });
+
+const DEFAULT_TRACKERS = [
+  'udp://open.demonii.com:1337/announce',
+  'udp://tracker.openbittorrent.com:80/announce',
+  'udp://tracker.coppersurfer.tk:6969/announce',
+  'udp://9.rarbg.to:2720/announce',
+  'udp://tracker.leechers-paradise.org:6969/announce',
+  'udp://exodus.desync.com:6969/announce',
+];
+
+function buildMagnet(s) {
+  const fromSources = (s.sources || [])
+    .filter(src => src.startsWith('tracker:'))
+    .map(src => src.slice(8));
+  const trackers = [...new Set([...fromSources, ...DEFAULT_TRACKERS])];
+  const tr = trackers.map(t => `&tr=${encodeURIComponent(t)}`).join('');
+  return `magnet:?xt=urn:btih:${s.infoHash}${tr}`;
+}
 
 // --- Torrentio ---
 
@@ -839,9 +856,10 @@ ipcMain.handle('torrentio:streams', async (_, id, type, season, episode) => {
         fileName,
         seeders: seedersMatch ? parseInt(seedersMatch[1]) : null,
         size: sizeMatch ? sizeMatch[1] : null,
-        magnet: s.infoHash ? `magnet:?xt=urn:btih:${s.infoHash}` : null,
+        magnet: s.infoHash ? buildMagnet(s) : null,
+        debrid: !s.infoHash,
       };
-    }).filter(s => s.magnet);
+    });
   } catch { return []; }
 });
 

@@ -1,13 +1,15 @@
 {
   "name": "torrent-player",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "description": "Stream torrents via an external player",
   "type": "module",
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
     "cli": "node src/index.js",
-    "dist": "electron-packager . TorrentPlayer --platform=win32 --arch=x64 --out=dist --overwrite --ignore=^/dist --ignore=^/\\.claude --ignore=^/\\.github --ignore=^/CLAUDE\\.md --ignore=^/README\\.md --ignore=^/LICENSE --ignore=^/\\.gitignore --ignore=^/\\.gitattributes --ignore=^/tasks --no-asar && node scripts/postbuild.mjs"
+    "dist": "electron-packager . TorrentPlayer --platform=win32 --arch=x64 --out=dist --overwrite --ignore=^/dist --ignore=^/\\.claude --ignore=^/\\.github --ignore=^/CLAUDE\\.md --ignore=^/README\\.md --ignore=^/LICENSE --ignore=^/\\.gitignore --ignore=^/\\.gitattributes --ignore=^/tasks --no-asar && node scripts/postbuild.mjs",
+    "dist:mac": "electron-packager . TorrentPlayer --platform=darwin --arch=x64,arm64 --out=dist --overwrite --ignore=^/dist --ignore=^/\\.claude --ignore=^/\\.github --ignore=^/CLAUDE\\.md --ignore=^/README\\.md --ignore=^/LICENSE --ignore=^/\\.gitignore --ignore=^/\\.gitattributes --ignore=^/tasks --no-asar && node scripts/postbuild.mjs darwin",
+    "dist:linux": "electron-packager . TorrentPlayer --platform=linux --arch=x64 --out=dist --overwrite --ignore=^/dist --ignore=^/\\.claude --ignore=^/\\.github --ignore=^/CLAUDE\\.md --ignore=^/README\\.md --ignore=^/LICENSE --ignore=^/\\.gitignore --ignore=^/\\.gitattributes --ignore=^/tasks --no-asar && node scripts/postbuild.mjs linux"
   },
   "dependencies": {
     "chromecasts": "^1.10.2",
