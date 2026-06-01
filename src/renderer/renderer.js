@@ -15,15 +15,23 @@ let discoverCache = {};
 let torrentioTitles = [];
 let torrentioCurrentItem = null;
 let torrentioBackFn = null;
+let searchDebounceTimer = null;
 const streamCache = new Map();
 const pendingTorrents = new Map();
+
+const ICONS = {
+  grip: `<svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor" xmlns="http://www.w3.org/2000/svg" style="opacity:0.5"><circle cx="3" cy="2.5" r="1.5"/><circle cx="7" cy="2.5" r="1.5"/><circle cx="3" cy="7" r="1.5"/><circle cx="7" cy="7" r="1.5"/><circle cx="3" cy="11.5" r="1.5"/><circle cx="7" cy="11.5" r="1.5"/></svg>`,
+  files: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>`,
+  cast: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 16.1A5 5 0 0 1 5.9 20M2 12.05A9 9 0 0 1 9.95 20M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6"/><line x1="2" y1="20" x2="2.01" y2="20"/></svg>`,
+  remove: `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
+};
 
 // --- Init ---
 
 async function init() {
   [settings, players] = await Promise.all([window.api.getSettings(), window.api.detectPlayers()]);
   applyTranslations(settings.language || 'en');
-  window.api.onState(data => { torrents = data; renderList(); });
+  window.api.onState(data => { torrents = data; renderList(); updateGlobalStats(); });
   window.api.onClipboardMagnet(magnet => showClipboardBanner(magnet));
   window.api.onUpdateAvailable(({ version, url }) => {
     let releaseUrl = url;
@@ -78,7 +86,13 @@ function bindUI() {
   }
 
   document.getElementById('search-btn').addEventListener('click', handleSearch);
-  document.getElementById('search-input').addEventListener('keydown', e => { if (e.key === 'Enter') handleSearch(); });
+  document.getElementById('search-input').addEventListener('keydown', e => { if (e.key === 'Enter') { clearTimeout(searchDebounceTimer); handleSearch(); } });
+  document.getElementById('search-input').addEventListener('input', () => {
+    const query = document.getElementById('search-input').value.trim();
+    clearTimeout(searchDebounceTimer);
+    if (query.length < 2) return;
+    searchDebounceTimer = setTimeout(() => handleSearch(), 600);
+  });
 
   document.querySelectorAll('.filter-btn[data-filter]').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -191,23 +205,54 @@ function bindUI() {
   document.getElementById('clipboard-dismiss').addEventListener('click', hideClipboardBanner);
 
   document.addEventListener('keydown', e => {
-    if (e.key !== 'Escape') return;
-    if (!document.getElementById('cast-modal').classList.contains('hidden')) closeCastModal();
-    else if (!document.getElementById('file-modal').classList.contains('hidden')) closeFilePicker();
-    else if (!document.getElementById('clipboard-banner').classList.contains('hidden')) hideClipboardBanner();
-    else if (!document.getElementById('about-modal').classList.contains('hidden')) closeAbout();
-    else if (!document.getElementById('detail-view').classList.contains('hidden')) closeDetailView();
-    else if (!document.getElementById('history-view').classList.contains('hidden')) closeHistory();
-    else if (!document.getElementById('settings-view').classList.contains('hidden')) closeSettings();
+    if (e.key === 'Escape') {
+      if (!document.getElementById('cast-modal').classList.contains('hidden')) { closeCastModal(); return; }
+      if (!document.getElementById('file-modal').classList.contains('hidden')) { closeFilePicker(); return; }
+      if (!document.getElementById('clipboard-banner').classList.contains('hidden')) { hideClipboardBanner(); return; }
+      if (!document.getElementById('about-modal').classList.contains('hidden')) { closeAbout(); return; }
+      if (!document.getElementById('detail-view').classList.contains('hidden')) { closeDetailView(); return; }
+      if (!document.getElementById('history-view').classList.contains('hidden')) { closeHistory(); return; }
+      if (!document.getElementById('settings-view').classList.contains('hidden')) { closeSettings(); return; }
+      const sr = document.getElementById('search-results');
+      if (sr.classList.contains('expanded')) {
+        sr.classList.add('hidden');
+        sr.classList.remove('expanded');
+        return;
+      }
+    }
+
+    if ((e.ctrlKey && e.key === 'k') || (e.key === '/' && !isInputActive())) {
+      e.preventDefault();
+      document.querySelector('.add-tab[data-tab="search"]').click();
+      document.getElementById('search-input').focus();
+    }
   });
+}
+
+function isInputActive() {
+  const el = document.activeElement;
+  return el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT');
 }
 
 // --- Discover ---
 
+function renderDiscoverSkeleton() {
+  const grid = document.getElementById('discover-results');
+  grid.innerHTML = Array(12).fill(0).map(() => `
+    <div class="discover-card skel-card">
+      <div class="discover-poster"><div class="skel-poster skel-block"></div></div>
+      <div class="discover-info">
+        <div class="skel-line w80 skel-block"></div>
+        <div class="skel-line w55 skel-block"></div>
+      </div>
+    </div>
+  `).join('');
+}
+
 async function loadDiscover(cat) {
   const grid = document.getElementById('discover-results');
   if (discoverCache[cat]) { renderDiscoverGrid(discoverCache[cat]); return; }
-  grid.innerHTML = `<div class="discover-loading">${t('discover.loading')}</div>`;
+  renderDiscoverSkeleton();
   try {
     const items = await window.api.discoverFetch(cat);
     discoverCache[cat] = items;
@@ -407,11 +452,20 @@ async function handleTorrentioSearch(query, type) {
   const resultsEl = document.getElementById('search-results');
   resultsEl.classList.remove('hidden');
   resultsEl.classList.add('expanded');
-  resultsEl.innerHTML = `<div class="search-status">${t('status.searching')}</div>`;
 
   const btn = document.getElementById('search-btn');
   btn.disabled = true;
   btn.textContent = '...';
+
+  resultsEl.innerHTML = `<div class="torrentio-grid">${Array(8).fill(0).map(() => `
+    <div class="torrentio-card skel-card">
+      <div class="torrentio-poster"><div class="skel-poster skel-block"></div></div>
+      <div style="padding:5px 6px 7px">
+        <div class="skel-line w80 skel-block" style="height:7px"></div>
+        <div class="skel-line w55 skel-block" style="height:6px;margin-top:5px"></div>
+      </div>
+    </div>
+  `).join('')}</div>`;
 
   try {
     const results = await window.api.torrentioSearch(query, type);
@@ -733,6 +787,23 @@ function fmtDate(iso) {
   } catch { return iso; }
 }
 
+function updateGlobalStats() {
+  const el = document.getElementById('global-stats');
+  if (!el) return;
+  const active = torrents.filter(x => !x.done);
+  if (!active.length && !torrents.some(x => x.uploadSpeed > 0)) {
+    el.classList.add('hidden');
+    return;
+  }
+  const totalDl = torrents.reduce((s, x) => s + x.downloadSpeed, 0);
+  const totalUl = torrents.reduce((s, x) => s + x.uploadSpeed, 0);
+  const totalPeers = torrents.reduce((s, x) => s + x.numPeers, 0);
+  el.classList.remove('hidden');
+  el.querySelector('.gs-dl').textContent = `↓ ${fmt(totalDl)}`;
+  el.querySelector('.gs-ul').textContent = `↑ ${fmt(totalUl)}`;
+  el.querySelector('.gs-peers').textContent = `${totalPeers} peers`;
+}
+
 function speedGraph(history) {
   if (!history || history.length < 2) return '<svg width="60" height="20"></svg>';
   const max = Math.max(...history, 1);
@@ -751,7 +822,7 @@ function createCard(torrent) {
     <img class="card-poster hidden" alt="">
     <div class="card-body">
       <div class="card-top">
-        <span class="drag-handle" title="${t('drag.handle')}">⠿</span>
+        <span class="drag-handle" title="${t('drag.handle')}">${ICONS.grip}</span>
         <span class="card-name" title="${torrent.name}">${torrent.name}</span>
         <span class="queue-badge hidden"></span>
         <span class="card-size">${fmtSize(torrent.size)}</span>
@@ -768,12 +839,12 @@ function createCard(torrent) {
       </div>
       <div class="playback-bar hidden"></div>
       <div class="card-actions">
-        <button class="btn-files hidden" title="${t('btn.chooseFile')}">📂</button>
+        <button class="btn-files hidden" title="${t('btn.chooseFile')}">${ICONS.files}</button>
         <button class="btn-play">${torrent.connecting ? t('card.buffering') : t('card.play')}</button>
         <button class="btn-local hidden">${t('card.playLocal')}</button>
-        <button class="btn-cast hidden">📺</button>
+        <button class="btn-cast hidden" title="Cast">${ICONS.cast}</button>
         <button class="btn-seed hidden">⏸ Seeding</button>
-        <button class="btn-remove">✕</button>
+        <button class="btn-remove" title="Remove">${ICONS.remove}</button>
       </div>
     </div>
   `;
@@ -842,6 +913,9 @@ function createCard(torrent) {
 
 function updateCard(card, torrent) {
   if (torrent.connecting) return;
+
+  // Now-playing indicator
+  card.classList.toggle('playing', !!torrent.playback);
 
   // Poster
   const poster = card.querySelector('.card-poster');

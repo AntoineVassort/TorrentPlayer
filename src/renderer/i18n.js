@@ -2,8 +2,8 @@
 
 const TRANSLATIONS = {
   en: {
-    'tab.magnet': '🔗 Magnet',
-    'tab.search': '🔍 Search',
+    'tab.magnet': 'Magnet',
+    'tab.search': 'Search',
     'magnet.placeholder': 'Paste a magnet link or drag a .torrent...',
     'btn.add': 'Add',
     'search.placeholder': 'Movie, series name...',
@@ -80,7 +80,7 @@ const TRANSLATIONS = {
     'sort.recent': 'Recent',
     'sort.title': 'Title',
     'sort.rating': 'Rating',
-    'tab.discover': '🎬 Discover',
+    'tab.discover': 'Discover',
     'discover.movies': 'Movies',
     'discover.series': 'Series',
     'discover.anime': 'Anime',
@@ -99,8 +99,8 @@ const TRANSLATIONS = {
     'torrentio.loadingStreams': 'Loading streams...',
   },
   fr: {
-    'tab.magnet': '🔗 Magnet',
-    'tab.search': '🔍 Recherche',
+    'tab.magnet': 'Magnet',
+    'tab.search': 'Recherche',
     'magnet.placeholder': 'Coller un lien magnet ou glisser un .torrent...',
     'btn.add': 'Ajouter',
     'search.placeholder': 'Nom du film, série...',
@@ -177,7 +177,7 @@ const TRANSLATIONS = {
     'sort.recent': 'Récents',
     'sort.title': 'Titre',
     'sort.rating': 'Note',
-    'tab.discover': '🎬 Découvrir',
+    'tab.discover': 'Découvrir',
     'discover.movies': 'Films',
     'discover.series': 'Séries',
     'discover.anime': 'Animé',

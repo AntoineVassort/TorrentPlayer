@@ -104,6 +104,9 @@ header button {
   transition: color var(--ease), background var(--ease);
   line-height: 1;
   font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 header button:hover { color: var(--text); background: var(--border); }
 
@@ -225,6 +228,9 @@ header button:hover { color: var(--text); background: var(--border); }
   cursor: pointer;
   transition: all var(--ease);
   font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 #browse-btn:hover { background: var(--card-h); border-color: var(--border-h); color: var(--text); }
 
@@ -458,6 +464,7 @@ header button:hover { color: var(--text); background: var(--border); }
   align-items: flex-start;
   transition: border-color 0.2s, box-shadow 0.2s, opacity 0.2s;
   animation: fadeInUp 0.2s ease;
+  position: relative;
 }
 .card:hover {
   border-color: rgba(229,9,20,0.25);
@@ -626,6 +633,9 @@ header button:hover { color: var(--text); background: var(--border); }
   cursor: pointer;
   transition: all var(--ease);
   font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .btn-remove:hover { color: var(--danger); border-color: var(--danger); background: rgba(239,68,68,0.08); }
 
@@ -640,6 +650,9 @@ header button:hover { color: var(--text); background: var(--border); }
   cursor: pointer;
   transition: all var(--ease);
   font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .btn-files:hover,
 .btn-cast:hover { color: var(--muted-h); border-color: var(--border-h); background: var(--card-h); }
@@ -1594,4 +1607,103 @@ section h2 {
 #detail-streams-area .torrentio-loading,
 #detail-streams-area .torrentio-empty {
   padding: 32px 16px;
+}
+
+/* ── View transitions ────────────────────────────────── */
+@keyframes viewSlideIn {
+  from { opacity: 0; transform: translateX(14px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+#main-view:not(.hidden),
+#settings-view:not(.hidden),
+#history-view:not(.hidden),
+#detail-view:not(.hidden) {
+  animation: viewSlideIn 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* ── Now-playing card ────────────────────────────────── */
+.card.playing {
+  border-color: rgba(229,9,20,0.42) !important;
+  box-shadow: 0 4px 28px rgba(0,0,0,0.42), 0 0 0 1px rgba(229,9,20,0.12) inset !important;
+}
+.card.playing::before {
+  content: '';
+  position: absolute;
+  left: -1px; top: 14px; bottom: 14px;
+  width: 3px;
+  background: var(--red);
+  border-radius: 3px;
+  box-shadow: 0 0 10px rgba(229,9,20,0.6);
+}
+
+/* ── Skeleton loading ────────────────────────────────── */
+@keyframes skel-shimmer {
+  from { background-position: -200% center; }
+  to   { background-position:  200% center; }
+}
+.skel-block {
+  background: linear-gradient(90deg, var(--card) 25%, var(--card-h) 50%, var(--card) 75%);
+  background-size: 200% 100%;
+  animation: skel-shimmer 1.4s linear infinite;
+  border-radius: 4px;
+}
+.skel-card { pointer-events: none; }
+.skel-card .skel-poster {
+  position: absolute;
+  inset: 0;
+  border-radius: 0;
+}
+.skel-card .skel-line {
+  height: 8px;
+  border-radius: 3px;
+  margin: 4px 0 0;
+}
+.skel-card .skel-line.w80 { width: 80%; }
+.skel-card .skel-line.w55 { width: 55%; }
+
+/* ── Global stats bar ────────────────────────────────── */
+#global-stats {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 5px 16px;
+  background: var(--surface);
+  border-top: 1px solid rgba(255,255,255,0.04);
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 500;
+}
+#global-stats .gs-dl { color: var(--success); }
+#global-stats .gs-ul { color: var(--indigo); }
+#global-stats .gs-peers { color: var(--muted); margin-left: auto; font-weight: 400; }
+
+/* ── Tab SVG icons ───────────────────────────────────── */
+.add-tab { display: flex; align-items: center; gap: 5px; }
+.add-tab svg { flex-shrink: 0; opacity: 0.75; transition: opacity var(--ease); }
+.add-tab:hover svg, .add-tab.active svg { opacity: 1; }
+header button svg { display: block; pointer-events: none; }
+.btn-icon-svg { display: flex; align-items: center; justify-content: center; }
+
+/* ── Keyboard shortcut hint ──────────────────────────── */
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  background: var(--border);
+  border: 1px solid var(--border-h);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted-h);
+  font-family: inherit;
+  letter-spacing: 0.2px;
+}
+#empty-state .kbd-hint {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--muted);
+  opacity: 0.45;
+  margin-top: 4px;
 }

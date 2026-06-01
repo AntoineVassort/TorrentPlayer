@@ -14,20 +14,37 @@
       <header>
         <img class="title-icon" src="../assets/tray.png" alt="">
         <span class="logo">TorrentPlayer</span>
-        <button id="history-btn" data-i18n-title="title.library" title="Library">🎬</button>
-        <button id="settings-btn" data-i18n-title="title.settings" title="Settings">⚙</button>
-        <button id="about-btn" data-i18n-title="title.about" title="About">ℹ</button>
+        <button id="history-btn" data-i18n-title="title.library" title="Library">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+        </button>
+        <button id="settings-btn" data-i18n-title="title.settings" title="Settings">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06-.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
+        <button id="about-btn" data-i18n-title="title.about" title="About">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        </button>
       </header>
 
       <div id="add-area">
         <div class="add-tabs">
-          <button class="add-tab active" data-tab="magnet" data-i18n="tab.magnet">🔗 Magnet</button>
-          <button class="add-tab" data-tab="search" data-i18n="tab.search">🔍 Search</button>
-          <button class="add-tab" data-tab="discover" data-i18n="tab.discover">🎬 Discover</button>
+          <button class="add-tab active" data-tab="magnet">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+            <span data-i18n="tab.magnet">Magnet</span>
+          </button>
+          <button class="add-tab" data-tab="search">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <span data-i18n="tab.search">Search</span>
+          </button>
+          <button class="add-tab" data-tab="discover">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>
+            <span data-i18n="tab.discover">Discover</span>
+          </button>
         </div>
         <div class="add-panel" data-panel="magnet">
           <input id="magnet-input" type="text" data-i18n-placeholder="magnet.placeholder" placeholder="Paste a magnet link or drag a .torrent...">
-          <button id="browse-btn" title="Open a .torrent file">📁</button>
+          <button id="browse-btn" title="Open a .torrent file" class="btn-icon-svg">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          </button>
           <button id="add-btn" data-i18n="btn.add">Add</button>
         </div>
         <div class="add-panel hidden" data-panel="search">
@@ -74,9 +91,18 @@
       <div id="torrent-list"></div>
 
       <div id="empty-state">
-        <div class="empty-icon">🎬</div>
+        <div class="empty-icon">
+          <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.2"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
+        </div>
         <p data-i18n="empty.noTorrent">No active torrents</p>
         <p class="muted" data-i18n="empty.hint">Search for a title or paste a magnet link</p>
+        <p class="kbd-hint"><span class="kbd">Ctrl+K</span> to search</p>
+      </div>
+
+      <div id="global-stats" class="hidden">
+        <span class="gs-dl" id="gs-dl"></span>
+        <span class="gs-ul" id="gs-ul"></span>
+        <span class="gs-peers" id="gs-peers"></span>
       </div>
     </div>
 
