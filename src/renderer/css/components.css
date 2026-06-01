@@ -235,6 +235,19 @@
 .btn-seed.active { color: var(--indigo-h); border-color: rgba(99,102,241,0.45); background: var(--indigo-dim); }
 .btn-seed:hover { color: var(--indigo-h); border-color: rgba(99,102,241,0.45); }
 
+.btn-retry {
+  background: rgba(245,158,11,0.08);
+  border: 1px solid rgba(245,158,11,0.4);
+  border-radius: 8px;
+  color: #f59e0b;
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all var(--ease);
+  font-family: inherit;
+}
+.btn-retry:hover { background: rgba(245,158,11,0.16); border-color: rgba(245,158,11,0.6); }
+
 /* ── Library view ─────────────────────────────────────── */
 #history-view { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
 

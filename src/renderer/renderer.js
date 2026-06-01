@@ -184,6 +184,11 @@ function bindUI() {
     if (e.target === document.getElementById('cast-modal')) closeCastModal();
   });
 
+  document.getElementById('alt-stream-close').addEventListener('click', closeAltStreamModal);
+  document.getElementById('alt-stream-modal').addEventListener('click', e => {
+    if (e.target === document.getElementById('alt-stream-modal')) closeAltStreamModal();
+  });
+
   // Player setup wizard
   document.getElementById('player-setup-close').addEventListener('click', closePlayerSetup);
   document.getElementById('player-setup-skip').addEventListener('click', closePlayerSetup);
@@ -223,6 +228,7 @@ function bindUI() {
     if (e.key === 'Escape') {
       if (!document.getElementById('player-setup-modal').classList.contains('hidden')) { closePlayerSetup(); return; }
       if (!document.getElementById('cast-modal').classList.contains('hidden')) { closeCastModal(); return; }
+      if (!document.getElementById('alt-stream-modal').classList.contains('hidden')) { closeAltStreamModal(); return; }
       if (!document.getElementById('file-modal').classList.contains('hidden')) { closeFilePicker(); return; }
       if (!document.getElementById('clipboard-banner').classList.contains('hidden')) { hideClipboardBanner(); return; }
       if (!document.getElementById('about-modal').classList.contains('hidden')) { closeAbout(); return; }
@@ -273,6 +279,9 @@ async function doAdd(source, resumePos = null, episodeContext = null) {
     const r = await window.api.addTorrent(source, resumePos, episodeContext);
     pendingTorrents.delete(pid);
     toast(t('toast.added', { name: r.name }));
+    if (r.diskWarning) {
+      toast(t('toast.diskLow', { need: fmtSize(r.diskWarning.need), free: fmtSize(r.diskWarning.free) }), true);
+    }
     if (r.videoFiles?.length > 1) openFilePicker(r.id, r.videoFiles);
     return r;
   } catch (err) {
@@ -346,6 +355,7 @@ function createCard(torrent) {
       </div>
       <div class="playback-bar hidden"></div>
       <div class="card-actions">
+        <button class="btn-retry hidden"></button>
         <button class="btn-files hidden" title="${t('btn.chooseFile')}">${ICONS.files}</button>
         <button class="btn-play">${torrent.connecting ? t('card.buffering') : t('card.play')}</button>
         <button class="btn-local hidden">${t('card.playLocal')}</button>
@@ -373,6 +383,11 @@ function createCard(torrent) {
   card.querySelector('.btn-files').addEventListener('click', () => {
     const state = torrents.find(x => x.id === torrent.id);
     if (state?.videoFiles?.length > 1) openFilePicker(torrent.id, state.videoFiles);
+  });
+  card.querySelector('.btn-retry').addEventListener('click', () => {
+    const state = torrents.find(x => x.id === torrent.id);
+    if (state?.episodeContext) openAlternateStreams(torrent.id, state.episodeContext);
+    else retryTorrent(torrent.id);
   });
 
   // Drag-and-drop for queue reordering
@@ -444,6 +459,11 @@ function updateCard(card, torrent) {
   // Stall detection — no peers and no speed while still downloading
   const stalled = !torrent.done && torrent.numPeers === 0 && torrent.downloadSpeed === 0;
   card.classList.toggle('stalled', stalled);
+
+  // Stalled action: switch release (if we know the episode) or just re-announce
+  const retryBtn = card.querySelector('.btn-retry');
+  retryBtn.classList.toggle('hidden', !stalled);
+  if (stalled) retryBtn.textContent = torrent.episodeContext ? t('card.altStream') : t('card.retry');
 
   // Peers — show upload when done + seeding
   const peersEl = card.querySelector('.peers');
@@ -615,6 +635,59 @@ function openFilePicker(torrentId, files) {
 function closeFilePicker() {
   document.getElementById('file-modal').classList.add('hidden');
   filePickerTorrentId = null;
+}
+
+// --- Stalled torrent recovery ---
+
+// Re-announce the same magnet to look for fresh peers (no episode context to switch).
+async function retryTorrent(id) {
+  try {
+    await window.api.retryTorrent(id);
+    toast(t('toast.retrying'));
+  } catch (err) { toast(err.message, true); }
+}
+
+// Show alternate Torrentio releases for the same episode; picking one drops the
+// stalled torrent and adds the chosen release (keeping the episode context).
+async function openAlternateStreams(id, ctx) {
+  const modal = document.getElementById('alt-stream-modal');
+  const list = document.getElementById('alt-stream-list');
+  list.innerHTML = `<div class="torrentio-loading">${t('torrentio.loadingStreams')}</div>`;
+  modal.classList.remove('hidden');
+  let streams;
+  try {
+    streams = await window.api.torrentioStreams(ctx.id, ctx.type, ctx.season, ctx.episode);
+  } catch {
+    list.innerHTML = `<div class="torrentio-empty">${t('status.networkError')}</div>`;
+    return;
+  }
+  const playable = (streams || []).filter(s => !s.debrid && s.magnet);
+  if (!playable.length) {
+    list.innerHTML = `<div class="torrentio-empty">${t('torrentio.noStreams')}</div>`;
+    return;
+  }
+  list.innerHTML = '';
+  for (const s of playable) {
+    const qualityClass = s.quality ? `q-${s.quality.toLowerCase().replace(/[^a-z0-9]/g, '')}` : '';
+    const row = document.createElement('div');
+    row.className = 'torrentio-stream';
+    row.innerHTML = `
+      ${s.quality ? `<span class="search-quality ${qualityClass}">${esc(s.quality)}</span>` : ''}
+      <span class="torrentio-stream-name" title="${esc(s.fileName)}">${esc(s.fileName)}</span>
+      ${s.seeders != null ? `<span class="search-seeds ${seedsClass(s.seeders)}">↑ ${Number(s.seeders)}</span>` : ''}
+      ${s.size ? `<span class="torrentio-stream-size">${esc(s.size)}</span>` : ''}
+    `;
+    row.addEventListener('click', async () => {
+      closeAltStreamModal();
+      try { await window.api.removeTorrent(id); } catch {}
+      doAdd(s.magnet, null, ctx);
+    });
+    list.appendChild(row);
+  }
+}
+
+function closeAltStreamModal() {
+  document.getElementById('alt-stream-modal').classList.add('hidden');
 }
 
 // --- History ---

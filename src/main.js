@@ -516,7 +516,7 @@ app.whenReady().then(async () => {
   setInterval(() => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
 
-    const state = [...active.values()].map(({ torrent, fileState, port, speedHistory, playback, resumePos, resumeDuration, meta, casting }) => {
+    const state = [...active.values()].map(({ torrent, fileState, port, speedHistory, playback, resumePos, resumeDuration, meta, casting, episodeContext }) => {
       speedHistory.push(torrent.downloadSpeed);
       if (speedHistory.length > 30) speedHistory.shift();
 
@@ -544,6 +544,7 @@ app.whenReady().then(async () => {
         meta: meta || null,
         queuePos: queueOrder.indexOf(torrent.infoHash),
         casting: casting || null,
+        episodeContext: episodeContext || null,
       };
     });
 
@@ -664,8 +665,26 @@ ipcMain.handle('torrent:add', async (_, source, resumePos = null, episodeContext
     }).catch(() => {});
   }
 
-  return result;
+  return { ...result, diskWarning: await checkDiskSpace(result.id, settings.downloadDir) };
 });
+
+// Warn (don't block) when free disk space is below the torrent's total size.
+// Metadata is resolved by now, so torrent.length is known.
+async function checkDiskSpace(id, downloadDir) {
+  const entry = active.get(id);
+  const need = entry?.torrent?.length;
+  if (!need) return null;
+  // downloadDir may not be created yet when this runs — fall back to userData,
+  // which sits on the same volume in the default config.
+  for (const dir of [downloadDir, app.getPath('userData')]) {
+    try {
+      const stat = await fs.promises.statfs(dir);
+      const free = stat.bavail * stat.bsize;
+      return free < need ? { free, need } : null;
+    } catch {}
+  }
+  return null;
+}
 
 ipcMain.handle('torrent:changeFile', (_, id, fileIndex) => {
   const entry = active.get(id);
@@ -786,6 +805,36 @@ ipcMain.handle('torrent:remove', (_, id) => {
   applyQueueRules();
   saveSession();
   return true;
+});
+
+// Re-add the same magnet to force a fresh DHT/tracker peer search (for stalled
+// torrents with no episode context to switch streams). The infoHash — and thus
+// the card id — is unchanged, so the queue position is preserved automatically.
+ipcMain.handle('torrent:retry', async (_, id) => {
+  const entry = active.get(id);
+  if (!entry) throw new Error('Torrent introuvable');
+  const magnet = entry.magnet || entry.torrent.magnetURI;
+  if (!magnet) throw new Error('Pas de magnet à relancer');
+  const episodeContext = entry.episodeContext || null;
+  const resumePos = entry.resumePos || null;
+  const settings = getSettings(app.getPath('userData'));
+
+  entry.playback?.socket?.destroy();
+  clearTimeout(entry._vlcTimer);
+  entry.server.close();
+  await new Promise(res => entry.torrent.destroy({}, () => res()));
+  active.delete(id);
+
+  const result = await addTorrentInternal(magnet, magnet, settings.downloadDir, resumePos, episodeContext);
+  applyQueueRules();
+  saveSession();
+  if (result.name) {
+    fetchMetaFromCinemeta(result.name).then(meta => {
+      const e = active.get(result.id);
+      if (e && meta) e.meta = meta;
+    }).catch(() => {});
+  }
+  return result;
 });
 
 ipcMain.handle('queue:reorder', (_, order) => {

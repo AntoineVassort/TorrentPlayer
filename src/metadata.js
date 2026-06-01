@@ -3,7 +3,21 @@
 // renderer never loads remote images directly (CSP-safe).
 
 import { ipcMain, app } from 'electron';
+import fs from 'fs';
+import path from 'path';
+import crypto from 'crypto';
 import { getSettings } from './settings.js';
+
+// Posters change rarely — cache the resolved data-URI on disk so Discover/Library
+// don't re-fetch every image each session.
+let posterCacheDir = null;
+function posterCachePath(url) {
+  if (!posterCacheDir) {
+    posterCacheDir = path.join(app.getPath('userData'), 'poster-cache');
+    try { fs.mkdirSync(posterCacheDir, { recursive: true }); } catch {}
+  }
+  return path.join(posterCacheDir, crypto.createHash('sha1').update(url).digest('hex'));
+}
 
 async function fetchItunesPoster(title, year, kind = 'movie') {
   try {
@@ -23,6 +37,11 @@ async function fetchItunesPoster(title, year, kind = 'movie') {
 
 export async function fetchImgBase64(url, referer) {
   if (!url) return null;
+  const cacheFile = posterCachePath(url);
+  try {
+    const cached = fs.readFileSync(cacheFile, 'utf8');
+    if (cached) return cached;
+  } catch {}
   const headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
     'Accept': 'image/webp,image/jpeg,image/*,*/*',
@@ -36,7 +55,9 @@ export async function fetchImgBase64(url, referer) {
       if (!res.ok) continue;
       const buf = await res.arrayBuffer();
       const mime = res.headers.get('content-type')?.split(';')[0] || 'image/jpeg';
-      return `data:${mime};base64,${Buffer.from(buf).toString('base64')}`;
+      const dataUri = `data:${mime};base64,${Buffer.from(buf).toString('base64')}`;
+      try { fs.writeFileSync(cacheFile, dataUri); } catch {}
+      return dataUri;
     } catch {}
   }
   return null;

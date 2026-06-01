@@ -18,6 +18,7 @@ TorrentPlayer downloads and streams simultaneously. It serves the file over a lo
 - **Resume position** — saved and restored for both mpv (IPC) and VLC (HTTP interface)
 - **Subtitles** — uses `.srt`/`.ass`/`.vtt` embedded in the torrent, and can auto-fetch from OpenSubtitles when none are present
 - **Smart queue** — download one at a time, drag to reorder
+- **Stuck-download recovery** — when a torrent finds no peers, switch to another release (series/anime) or retry the search in one click; warns when disk space is low
 - **Library** — media grid with posters, ratings and titles for everything you've watched (metadata via Cinemeta, no API key)
 - **Chromecast** — cast to any device on your local network
 - **Bandwidth limits** — optional max download / upload speed

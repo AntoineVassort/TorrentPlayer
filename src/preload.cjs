@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('api', {
   playLocal:         (id)         => ipcRenderer.invoke('torrent:playLocal', id),
   stopSeed:          (id)         => ipcRenderer.invoke('torrent:stopSeed', id),
   removeTorrent:     (id)         => ipcRenderer.invoke('torrent:remove', id),
+  retryTorrent:      (id)         => ipcRenderer.invoke('torrent:retry', id),
   reorderQueue:      (order)      => ipcRenderer.invoke('queue:reorder', order),
   getHistory:        ()           => ipcRenderer.invoke('history:get'),
   fetchHistoryMeta:  (id, name)   => ipcRenderer.invoke('history:fetchMeta', id, name),
