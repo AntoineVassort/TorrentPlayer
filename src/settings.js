@@ -13,6 +13,7 @@ export function getDefaults(userDataPath) {
     subtitleLanguage: 'off',
     openSubtitlesApiKey: null,
     autoPlayNext: true,
+    autoGrabFollowed: false,
   };
 }
 

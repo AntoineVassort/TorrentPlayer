@@ -15,6 +15,7 @@ TorrentPlayer downloads and streams simultaneously. It serves the file over a lo
 - **Stream while downloading** — playback starts before the download completes
 - **Continue Watching** — resume where you left off; the library shows a progress bar and a one-click resume
 - **Auto-play next episode** — when an episode ends, the next one is fetched and played automatically (toggle in Settings)
+- **Follow series** — ★ follow a series to get notified when a new episode airs; download it in one click, or auto-download (opt-in). Followed shows and their next air date appear in the Library
 - **Resume position** — saved and restored for both mpv (IPC) and VLC (HTTP interface)
 - **Subtitles** — uses `.srt`/`.ass`/`.vtt` embedded in the torrent, and can auto-fetch from OpenSubtitles when none are present
 - **Smart queue** — download one at a time, drag to reorder

@@ -179,6 +179,8 @@ async function renderHistory() {
   grid.textContent = '';
   continueGrid.textContent = '';
 
+  renderFollows();
+
   let history = [];
   try { history = await window.api.getHistory(); } catch {}
 
@@ -227,6 +229,71 @@ async function renderHistory() {
   }
 }
 
+// --- Followed series shelf ---
+
+async function renderFollows() {
+  const section = document.getElementById('follows-section');
+  const grid = document.getElementById('follows-grid');
+  grid.textContent = '';
+  let follows = [];
+  try { follows = await window.api.followList(); } catch {}
+  section.classList.toggle('hidden', follows.length === 0);
+  for (const f of follows) grid.appendChild(createFollowCard(f));
+}
+
+function createFollowCard(f) {
+  const card = document.createElement('div');
+  card.className = 'follow-card';
+
+  const posterHTML = f.poster
+    ? `<img class="lib-poster" src="${esc(f.poster)}" alt="">`
+    : `<div class="lib-no-poster"></div>`;
+
+  let statusHTML;
+  if (f.pendingEpisode) {
+    statusHTML = `<div class="follow-new">${t('follow.newEpisode', { label: f.pendingEpisode.label })}</div>`;
+  } else if (f.nextAir) {
+    const when = f.nextAir.airstamp ? fmtDate(f.nextAir.airstamp) : '';
+    statusHTML = `<div class="follow-next">${t('follow.next', { label: `S${f.nextAir.season}E${f.nextAir.number}`, date: when })}</div>`;
+  } else {
+    statusHTML = `<div class="follow-next">${t('follow.noUpcoming')}</div>`;
+  }
+
+  const grabBtn = f.pendingEpisode ? `<button class="btn-lib-play follow-grab">${t('follow.grab')}</button>` : '';
+
+  card.innerHTML = `
+    <div class="follow-poster-wrap">
+      ${posterHTML}
+      <div class="lib-overlay">
+        <div class="lib-overlay-actions">
+          ${grabBtn}
+          <button class="btn-lib-remove">✕</button>
+        </div>
+      </div>
+    </div>
+    <div class="follow-caption">
+      <div class="follow-card-title">${esc(f.title)}</div>
+      ${statusHTML}
+    </div>
+  `;
+
+  card.querySelector('.follow-grab')?.addEventListener('click', async e => {
+    e.stopPropagation();
+    try {
+      const r = await window.api.followGrab(f.imdbId);
+      toast(t('toast.added', { name: r.name }));
+      renderFollows();
+    } catch (err) { toast(err.message, true); }
+  });
+  card.querySelector('.btn-lib-remove').addEventListener('click', async e => {
+    e.stopPropagation();
+    await window.api.followRemove(f.imdbId);
+    renderFollows();
+  });
+
+  return card;
+}
+
 // --- Clipboard banner ---
 
 async function openAbout() {
@@ -260,6 +327,7 @@ function populateSettings() {
 
   document.getElementById('language-select').value = settings.language || 'en';
   document.getElementById('auto-play-next').checked = settings.autoPlayNext !== false;
+  document.getElementById('auto-grab-followed').checked = !!settings.autoGrabFollowed;
   document.getElementById('download-dir').value = settings.downloadDir || '';
   document.getElementById('delete-after-play').checked = !!settings.deleteAfterPlay;
   document.getElementById('max-download').value = settings.maxDownload || '';
@@ -313,6 +381,7 @@ async function saveSettings() {
   const maxUl = parseInt(document.getElementById('max-upload').value) || 0;
   const language = document.getElementById('language-select').value;
   const autoPlayNext = document.getElementById('auto-play-next').checked;
+  const autoGrabFollowed = document.getElementById('auto-grab-followed').checked;
   const torrentioUrl = document.getElementById('torrentio-url').value.trim();
   const subtitleLanguage = document.getElementById('subtitle-language').value;
   const openSubtitlesApiKey = document.getElementById('opensubtitles-key').value.trim();
@@ -326,6 +395,7 @@ async function saveSettings() {
     maxUpload: maxUl || null,
     language,
     autoPlayNext,
+    autoGrabFollowed,
     torrentioUrl: torrentioUrl || null,
     subtitleLanguage,
     openSubtitlesApiKey: openSubtitlesApiKey || null,

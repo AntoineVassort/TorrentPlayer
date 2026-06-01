@@ -116,6 +116,10 @@
         <span class="logo" data-i18n="history.title">Library</span>
       </header>
       <div id="history-content">
+        <div id="follows-section" class="hidden">
+          <h3 class="lib-section-title" data-i18n="follow.shelfTitle">Followed series</h3>
+          <div id="follows-grid"></div>
+        </div>
         <div id="continue-section" class="hidden">
           <h3 class="lib-section-title" data-i18n="lib.continue">Continue Watching</h3>
           <div id="continue-grid"></div>
@@ -164,6 +168,12 @@
             <label class="checkbox-label">
               <input type="checkbox" id="auto-play-next">
               <span data-i18n="label.autoPlayNext">Auto-play next episode</span>
+            </label>
+          </div>
+          <div class="field-row">
+            <label class="checkbox-label">
+              <input type="checkbox" id="auto-grab-followed">
+              <span data-i18n="label.autoGrabFollowed">Auto-download new episodes of followed series</span>
             </label>
           </div>
         </section>

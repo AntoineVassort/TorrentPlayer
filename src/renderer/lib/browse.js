@@ -144,6 +144,8 @@ function openDetailView(item) {
   const parts = [item.year, item.rating ? `★ ${item.rating}` : null].filter(Boolean);
   document.getElementById('detail-meta-text').textContent = parts.join(' · ');
 
+  setupFollowButton(item);
+
   document.getElementById('detail-ep-picker').classList.add('hidden');
   document.getElementById('detail-streams-area').innerHTML = '';
 
@@ -164,6 +166,45 @@ function openDetailView(item) {
       area.innerHTML = `<div class="torrentio-empty">${t('status.networkError')}</div>`;
     });
   }
+}
+
+// ★ Follow toggle in the Discover detail view (series with imdb only).
+function setupFollowButton(item) {
+  const host = document.getElementById('detail-info');
+  host.querySelectorAll('.detail-follow').forEach(b => b.remove());
+  if (item.type === 'series' && item.imdbId) {
+    attachFollowButton(host, { imdbId: item.imdbId, title: item.title, poster: item.posterUrl || item.poster || null });
+  }
+}
+
+// Create + wire a ★ follow toggle for a series, appended to `host`. Shared by the
+// Discover detail view and the search episode picker (TVmaze-backed → imdb required).
+async function attachFollowButton(host, { imdbId, title, poster }) {
+  if (!imdbId) return;
+  const btn = document.createElement('button');
+  btn.className = 'detail-follow';
+  btn.textContent = t('follow.add');
+  host.appendChild(btn);
+
+  let following = false;
+  try { following = (await window.api.followList()).some(f => f.imdbId === imdbId); } catch {}
+  const paint = () => {
+    btn.textContent = following ? t('follow.remove') : t('follow.add');
+    btn.classList.toggle('following', following);
+  };
+  paint();
+
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    try {
+      if (following) await window.api.followRemove(imdbId);
+      else await window.api.followAdd({ imdbId, title, poster: poster || null });
+      following = !following;
+      paint();
+      toast(following ? t('toast.followed', { name: title }) : t('toast.unfollowed', { name: title }));
+    } catch (err) { toast(err.message, true); }
+    btn.disabled = false;
+  });
 }
 
 function setupDetailEpPicker(item) {
@@ -302,6 +343,11 @@ function renderTorrentioEpPicker(item) {
     const episode = parseInt(document.getElementById('t-episode').value) || 1;
     fetchAndRenderTorrentioStreams(item.id, item.type, season, episode, item);
   });
+  // Follow toggle for imdb-backed series (search results from Cinemeta use tt… ids).
+  if (item.type === 'series' && /^tt/.test(item.id || '')) {
+    const host = resultsEl.querySelector('.torrentio-stream-header-info > div');
+    if (host) attachFollowButton(host, { imdbId: item.id, title: item.title, poster: item.poster || null });
+  }
 }
 
 function pickBestStream(streams, tier) {

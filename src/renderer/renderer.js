@@ -18,6 +18,10 @@ async function init() {
   window.api.onState(data => { torrents = data; renderList(); updateGlobalStats(); });
   window.api.onClipboardMagnet(magnet => showClipboardBanner(magnet));
   window.api.onNextEpisode(data => showNextEpisodeBanner(data));
+  window.api.onNewEpisode(data => {
+    toast(t('follow.newEpisode', { label: `${data.title} ${data.label}` }));
+    if (!document.getElementById('history-view').classList.contains('hidden')) renderFollows();
+  });
   window.api.onUpdateAvailable(({ version, url }) => {
     let releaseUrl = url;
     document.getElementById('update-text').textContent = t('update.available', { version });

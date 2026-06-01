@@ -265,3 +265,40 @@ export function pickBestTorrentioStream(streams) {
   const pool = hd.length ? hd : playable;
   return pool.reduce((best, s) => (s.seeders ?? 0) > (best.seeders ?? 0) ? s : best);
 }
+
+// --- TVmaze (series episode list & air dates) — used by "follow a series" and the
+// full episode view. TVmaze is keyed by its own id; resolve from imdb first. ---
+
+export async function fetchTvmazeShowByImdb(imdbId) {
+  if (!imdbId) return null;
+  try {
+    const res = await fetch(`https://api.tvmaze.com/lookup/shows?imdb=${encodeURIComponent(imdbId)}`, {
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) return null;
+    const show = await res.json();
+    return show?.id ? show : null;
+  } catch { return null; }
+}
+
+// Returns the full episode list for a series (by imdb id), normalized to
+// { season, number, name, airstamp }. Empty array on any failure.
+export async function fetchSeriesEpisodes(imdbId, tvmazeId = null) {
+  try {
+    let id = tvmazeId;
+    if (!id) {
+      const show = await fetchTvmazeShowByImdb(imdbId);
+      id = show?.id || null;
+    }
+    if (!id) return { tvmazeId: null, episodes: [] };
+    const res = await fetch(`https://api.tvmaze.com/shows/${id}/episodes`, {
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) return { tvmazeId: id, episodes: [] };
+    const data = await res.json();
+    const episodes = (Array.isArray(data) ? data : [])
+      .filter(e => e.season != null && e.number != null)
+      .map(e => ({ season: e.season, number: e.number, name: e.name || '', airstamp: e.airstamp || null }));
+    return { tvmazeId: id, episodes };
+  } catch { return { tvmazeId: tvmazeId || null, episodes: [] }; }
+}

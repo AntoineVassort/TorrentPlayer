@@ -10,9 +10,10 @@ import WebTorrent from 'webtorrent';
 import { detect } from './playerDetector.js';
 import { getSettings, saveSettings } from './settings.js';
 import { addEntry, loadHistory, removeEntry, updateEntry } from './history.js';
+import { loadFollows, addFollow, removeFollow, updateFollow } from './follows.js';
 import { discoverDevices, castMedia, getLocalIP } from './chromecast.js';
 import { fetchSubtitle, cleanReleaseName, parseSeasonEpisode } from './subtitles.js';
-import { fetchMetaFromCinemeta, registerMetadataIpc, fetchTorrentioStreams, pickBestTorrentioStream } from './metadata.js';
+import { fetchMetaFromCinemeta, registerMetadataIpc, fetchTorrentioStreams, pickBestTorrentioStream, fetchSeriesEpisodes } from './metadata.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -408,6 +409,79 @@ async function maybeOfferNextEpisode(id) {
   });
 }
 
+// --- Followed series (persistent tracking + new-episode alerts) ---
+
+// Fetch the best stream for a specific series episode and add it to the queue.
+async function grabFollowedEpisode({ imdbId, season, episode, title, poster }) {
+  const settings = getSettings(app.getPath('userData'));
+  const streams = await fetchTorrentioStreams(imdbId, 'series', season, episode, settings.torrentioUrl);
+  const best = pickBestTorrentioStream(streams);
+  if (!best || !best.magnet) return null;
+  const result = await addTorrentInternal(best.magnet, best.magnet, settings.downloadDir, null, {
+    id: imdbId, type: 'series', season, episode, title: title || null, poster: poster || null,
+  });
+  if (!queueOrder.includes(result.id)) {
+    queueOrder.push(result.id);
+    applyQueueRules();
+    saveSession();
+  }
+  return result;
+}
+
+function notifyNewEpisode(follow, ep) {
+  const label = `S${ep.season}E${ep.number}`;
+  if (Notification.isSupported()) {
+    const s = getSettings(app.getPath('userData'));
+    const body = s.language === 'fr'
+      ? `${follow.title} — nouvel épisode ${label}`
+      : `${follow.title} — new episode ${label}`;
+    new Notification({ title: 'TorrentPlayer', body }).show();
+  }
+  mainWindow?.webContents.send('follow:newEpisode', {
+    imdbId: follow.imdbId, title: follow.title, poster: follow.poster, season: ep.season, number: ep.number, label,
+  });
+}
+
+// Poll every followed series for newly-aired episodes. Notifies (and auto-grabs if
+// enabled) and refreshes each follow's lastAiredSeen / nextAir / pendingEpisode.
+async function checkFollows() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const userData = app.getPath('userData');
+  const settings = getSettings(userData);
+  const now = Date.now();
+  for (const f of loadFollows(userData)) {
+    try {
+      const { tvmazeId, episodes } = await fetchSeriesEpisodes(f.imdbId, f.tvmazeId);
+      if (!episodes.length) continue;
+      const ts = (e) => new Date(e.airstamp).getTime();
+      const aired = episodes.filter(e => e.airstamp && ts(e) <= now);
+      const upcoming = episodes.filter(e => e.airstamp && ts(e) > now).sort((a, b) => ts(a) - ts(b))[0] || null;
+      const lastSeen = f.lastAiredSeen ? new Date(f.lastAiredSeen).getTime() : 0;
+      const newestAired = aired.reduce((m, e) => Math.max(m, ts(e)), lastSeen);
+
+      const fields = {
+        tvmazeId: tvmazeId || f.tvmazeId || null,
+        lastAiredSeen: newestAired ? new Date(newestAired).toISOString() : f.lastAiredSeen,
+        nextAir: upcoming ? { season: upcoming.season, number: upcoming.number, airstamp: upcoming.airstamp } : null,
+      };
+
+      // Only alert on a follow we've already snapshotted (lastAiredSeen set at follow time),
+      // to avoid spamming about the whole back-catalogue.
+      const fresh = f.lastAiredSeen != null ? aired.filter(e => ts(e) > lastSeen) : [];
+      if (fresh.length) {
+        const newest = fresh.sort((a, b) => ts(b) - ts(a))[0];
+        notifyNewEpisode(f, newest);
+        if (settings.autoGrabFollowed) {
+          grabFollowedEpisode({ imdbId: f.imdbId, season: newest.season, episode: newest.number, title: f.title, poster: f.poster }).catch(() => {});
+        } else {
+          fields.pendingEpisode = { season: newest.season, number: newest.number, label: `S${newest.season}E${newest.number}` };
+        }
+      }
+      updateFollow(userData, f.imdbId, fields);
+    } catch { /* skip this follow */ }
+  }
+}
+
 // --- Add torrent (shared logic) ---
 
 function addTorrentInternal(torrentId, magnet, downloadDir, resumePos = null, episodeContext = null) {
@@ -567,6 +641,10 @@ app.whenReady().then(async () => {
 
   // Check for updates
   mainWindow.webContents.once('did-finish-load', () => checkForUpdates(mainWindow));
+
+  // Followed-series new-episode poll: once shortly after launch, then every 6 h.
+  setTimeout(() => { checkFollows().catch(() => {}); }, 20000);
+  setInterval(() => { checkFollows().catch(() => {}); }, 6 * 60 * 60 * 1000);
 
   // Restore session
   mainWindow.webContents.once('did-finish-load', async () => {
@@ -855,6 +933,49 @@ ipcMain.handle('history:fetchMeta', async (_, id, name) => {
 ipcMain.handle('history:remove', (_, id) => {
   removeEntry(app.getPath('userData'), id);
   return true;
+});
+
+ipcMain.handle('follow:list', () => loadFollows(app.getPath('userData')));
+
+ipcMain.handle('follow:add', async (_, item) => {
+  if (!item?.imdbId) throw new Error('imdbId requis');
+  const userData = app.getPath('userData');
+  // Snapshot current episode state so we don't alert about already-aired episodes.
+  const { tvmazeId, episodes } = await fetchSeriesEpisodes(item.imdbId);
+  const now = Date.now();
+  const ts = (e) => new Date(e.airstamp).getTime();
+  const aired = episodes.filter(e => e.airstamp && ts(e) <= now);
+  const upcoming = episodes.filter(e => e.airstamp && ts(e) > now).sort((a, b) => ts(a) - ts(b))[0] || null;
+  const newestAired = aired.reduce((m, e) => Math.max(m, ts(e)), 0);
+  addFollow(userData, {
+    imdbId: item.imdbId, type: 'series', title: item.title || item.imdbId, poster: item.poster || null,
+    tvmazeId: tvmazeId || null,
+    lastAiredSeen: newestAired ? new Date(newestAired).toISOString() : null,
+    nextAir: upcoming ? { season: upcoming.season, number: upcoming.number, airstamp: upcoming.airstamp } : null,
+    pendingEpisode: null,
+  });
+  return loadFollows(userData);
+});
+
+ipcMain.handle('follow:remove', (_, imdbId) => {
+  removeFollow(app.getPath('userData'), imdbId);
+  return loadFollows(app.getPath('userData'));
+});
+
+ipcMain.handle('follow:check', async () => {
+  await checkFollows();
+  return loadFollows(app.getPath('userData'));
+});
+
+ipcMain.handle('follow:grab', async (_, imdbId) => {
+  const userData = app.getPath('userData');
+  const f = loadFollows(userData).find(x => x.imdbId === imdbId);
+  if (!f || !f.pendingEpisode) throw new Error('Aucun épisode à télécharger');
+  const ep = f.pendingEpisode;
+  const result = await grabFollowedEpisode({ imdbId, season: ep.season, episode: ep.number, title: f.title, poster: f.poster });
+  if (!result) throw new Error('Aucun stream trouvé');
+  updateFollow(userData, imdbId, { pendingEpisode: null });
+  return result;
 });
 
 ipcMain.handle('cast:discover', () => discoverDevices(4000));
