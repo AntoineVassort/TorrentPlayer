@@ -4,6 +4,7 @@ import path from 'path';
 import http from 'http';
 import net from 'net';
 import fs from 'fs';
+import crypto from 'crypto';
 import { spawn } from 'child_process';
 import WebTorrent from 'webtorrent';
 import { detect } from './playerDetector.js';
@@ -210,7 +211,7 @@ function buildPlaybackArgs(entry, player, id) {
     args.push(`--input-ipc-server=${mpvPipePath(id)}`);
   } else if (kind === 'vlc') {
     const port = 9000 + (entry.port - 8888);
-    const pwd = Math.random().toString(36).slice(2, 12);
+    const pwd = crypto.randomBytes(12).toString('hex');
     args.push('--extraintf=http', '--http-host=127.0.0.1', `--http-port=${port}`, `--http-password=${pwd}`);
     vlc = { port, pwd };
   }
@@ -456,10 +457,20 @@ function addTorrentInternal(torrentId, magnet, downloadDir, resumePos = null, ep
         }
       });
 
+      // Track live connections so the server can be torn down / rebound cleanly.
+      const sockets = new Set();
+      server.on('connection', (sock) => {
+        sockets.add(sock);
+        sock.on('close', () => sockets.delete(sock));
+      });
+
+      // Bind to loopback only by default — the stream is reachable from this
+      // machine, not the whole LAN. ensureLanReachable() rebinds to 0.0.0.0
+      // on demand when the user casts (Chromecast needs LAN access).
       const tryListen = (port) => {
-        server.listen(port, () => {
+        server.listen(port, '127.0.0.1', () => {
           active.set(torrent.infoHash, {
-            torrent, fileState, server, port, magnet,
+            torrent, fileState, server, port, magnet, sockets, host: '127.0.0.1',
             speedHistory: [], playback: null, resumePos,
             queuePaused: false, meta: null, casting: null,
             episodeContext: episodeContext || null,
@@ -799,9 +810,29 @@ ipcMain.handle('history:remove', (_, id) => {
 
 ipcMain.handle('cast:discover', () => discoverDevices(4000));
 
+// Rebind a torrent's stream server from loopback to 0.0.0.0 so a Chromecast on
+// the LAN can reach it. Existing connections (e.g. a local player) are dropped —
+// acceptable since casting deliberately moves playback to the TV. Once exposed
+// it stays exposed (0.0.0.0 already covers loopback).
+function ensureLanReachable(entry) {
+  if (entry.host === '0.0.0.0') return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    entry.server.once('close', () => {
+      entry.server.once('error', reject);
+      entry.server.listen(entry.port, '0.0.0.0', () => {
+        entry.host = '0.0.0.0';
+        resolve();
+      });
+    });
+    entry.server.close();
+    for (const sock of entry.sockets) sock.destroy();
+  });
+}
+
 ipcMain.handle('cast:play', async (_, id, host) => {
   const entry = active.get(id);
   if (!entry) throw new Error('Torrent introuvable');
+  await ensureLanReachable(entry);
   const url = `http://${getLocalIP()}:${entry.port}/`;
   await castMedia(host, url);
   entry.casting = host;
