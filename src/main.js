@@ -346,18 +346,19 @@ app.whenReady().then(async () => {
       if (speedHistory.length > 30) speedHistory.shift();
 
       const file = fileState.file;
+      const fileProgress = file && file.length > 0 ? file.downloaded / file.length : torrent.progress;
       return {
         id: torrent.infoHash,
         name: file ? file.name : torrent.name,
         size: file ? file.length : 0,
         downloaded: file ? file.downloaded : 0,
-        progress: torrent.progress,
+        progress: fileProgress,
         downloadSpeed: torrent.downloadSpeed,
         uploadSpeed: torrent.uploadSpeed,
         numPeers: torrent.numPeers,
         done: torrent.done,
         paused: torrent.paused,
-        ready: torrent.progress >= 0.05 || torrent.done,
+        ready: fileProgress >= 0.05 || torrent.done,
         timeRemaining: torrent.timeRemaining,
         hasSubtitle: !!fileState.subtitle,
         speedHistory: [...speedHistory],
@@ -371,6 +372,20 @@ app.whenReady().then(async () => {
     });
 
     mainWindow.webContents.send('torrent:state', state);
+
+    // Update tray tooltip with live download speed
+    if (tray) {
+      const downloading = state.filter(s => !s.done);
+      if (downloading.length) {
+        const totalDl = downloading.reduce((s, t) => s + t.downloadSpeed, 0);
+        const fmtSpd = totalDl < 1024 * 1024
+          ? `${(totalDl / 1024).toFixed(0)} KB/s`
+          : `${(totalDl / 1024 / 1024).toFixed(1)} MB/s`;
+        tray.setToolTip(`TorrentPlayer — ↓ ${fmtSpd} · ${downloading.length} active`);
+      } else {
+        tray.setToolTip('TorrentPlayer');
+      }
+    }
   }, 1000);
 
   // Check for updates
@@ -427,14 +442,27 @@ app.on('window-all-closed', () => {
 // --- IPC ---
 
 ipcMain.handle('torrent:add', async (_, source) => {
+  if (typeof source !== 'string' || !source.trim()) throw new Error('Invalid source');
+
   let torrentId = source;
   const magnet = source.startsWith('magnet:') ? source : null;
+
+  // Early duplicate check via infoHash from magnet URI
+  if (magnet) {
+    const hashMatch = magnet.match(/xt=urn:btih:([0-9a-f]{40}|[A-Z2-7]{32})/i);
+    if (hashMatch) {
+      const hash = hashMatch[1].toLowerCase();
+      if (active.has(hash)) throw new Error('already_downloading');
+    }
+  }
+
   if (!magnet) {
     try { torrentId = fs.readFileSync(source); }
     catch (e) { throw new Error(`Impossible de lire le fichier : ${e.message}`); }
   }
   const settings = getSettings(app.getPath('userData'));
   const result = await addTorrentInternal(torrentId, magnet, settings.downloadDir);
+  if (active.has(result.id) && queueOrder.includes(result.id)) throw new Error('already_downloading');
 
   if (!queueOrder.includes(result.id)) {
     queueOrder.push(result.id);
@@ -601,9 +629,17 @@ ipcMain.handle('cast:play', async (_, id, host) => {
   return true;
 });
 
-ipcMain.on('update:openRelease', (_, url) => shell.openExternal(url));
+function safeOpenExternal(url) {
+  try {
+    const u = new URL(url);
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') return;
+    shell.openExternal(url);
+  } catch {}
+}
+
+ipcMain.on('update:openRelease', (_, url) => safeOpenExternal(url));
 ipcMain.handle('app:version', () => app.getVersion());
-ipcMain.on('app:openExternal', (_, url) => shell.openExternal(url));
+ipcMain.on('app:openExternal', (_, url) => safeOpenExternal(url));
 
 ipcMain.handle('settings:get', () => getSettings(app.getPath('userData')));
 

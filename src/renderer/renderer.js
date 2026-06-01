@@ -19,6 +19,10 @@ let searchDebounceTimer = null;
 const streamCache = new Map();
 const pendingTorrents = new Map();
 
+function esc(v) {
+  return String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 const ICONS = {
   grip: `<svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor" xmlns="http://www.w3.org/2000/svg" style="opacity:0.5"><circle cx="3" cy="2.5" r="1.5"/><circle cx="7" cy="2.5" r="1.5"/><circle cx="3" cy="7" r="1.5"/><circle cx="7" cy="7" r="1.5"/><circle cx="3" cy="11.5" r="1.5"/><circle cx="7" cy="11.5" r="1.5"/></svg>`,
   files: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>`,
@@ -278,11 +282,11 @@ function renderDiscoverGrid(items) {
     if (!item.posterUrl) card.classList.add('no-poster');
     card.innerHTML = `
       <div class="discover-poster">
-        ${item.posterUrl ? `<img src="${item.posterUrl}" alt="" loading="lazy">` : ''}
+        ${item.posterUrl ? `<img src="${esc(item.posterUrl)}" alt="" loading="lazy">` : ''}
       </div>
       <div class="discover-info">
-        <span class="discover-title">${item.title}</span>
-        ${meta ? `<span class="discover-meta">${meta}</span>` : ''}
+        <span class="discover-title">${esc(item.title)}</span>
+        ${meta ? `<span class="discover-meta">${esc(meta)}</span>` : ''}
       </div>
     `;
     if (item.type === 'movie' && item.imdbId) {
@@ -346,14 +350,14 @@ function renderResult(r) {
   row.title = r.name;
   row.innerHTML = `
     <div class="search-row-top">
-      <span class="search-name">${title}</span>
-      ${quality ? `<span class="search-quality q-${quality.toLowerCase()}">${quality}</span>` : ''}
+      <span class="search-name">${esc(title)}</span>
+      ${quality ? `<span class="search-quality q-${quality.toLowerCase()}">${esc(quality)}</span>` : ''}
     </div>
-    <div class="search-raw-name">${r.name}</div>
+    <div class="search-raw-name">${esc(r.name)}</div>
     <div class="search-row-bottom">
-      <span class="search-source search-source-${(r.source||'').toLowerCase()}">${r.source||''}</span>
-      <span class="search-seeds ${seedsClass(r.seeders)}">↑ ${r.seeders}</span>
-      <span class="search-leechers">↓ ${r.leechers}</span>
+      <span class="search-source search-source-${esc((r.source||'').toLowerCase())}">${esc(r.source||'')}</span>
+      <span class="search-seeds ${seedsClass(r.seeders)}">↑ ${Number(r.seeders)}</span>
+      <span class="search-leechers">↓ ${Number(r.leechers)}</span>
       <span class="search-size">${fmtSize(r.size)}</span>
     </div>
   `;
@@ -494,11 +498,11 @@ function renderTorrentioTitles(results, type) {
     const meta = [item.year, item.rating ? `★ ${item.rating}` : null].filter(Boolean).join(' · ');
     card.innerHTML = `
       <div class="torrentio-poster">
-        ${item.poster ? `<img src="${item.poster}" alt="" loading="lazy">` : '<div class="torrentio-poster-empty">🎬</div>'}
+        ${item.poster ? `<img src="${esc(item.poster)}" alt="" loading="lazy">` : '<div class="torrentio-poster-empty">🎬</div>'}
       </div>
       <div class="torrentio-card-info">
-        <div class="torrentio-card-title" title="${item.title}">${item.title}</div>
-        ${meta ? `<div class="torrentio-card-meta">${meta}</div>` : ''}
+        <div class="torrentio-card-title" title="${esc(item.title)}">${esc(item.title)}</div>
+        ${meta ? `<div class="torrentio-card-meta">${esc(meta)}</div>` : ''}
       </div>
     `;
     card.addEventListener('click', () => selectTorrentioTitle(item));
@@ -523,10 +527,10 @@ function renderTorrentioEpPicker(item) {
     <div class="torrentio-back">
       <button id="torrentio-back-btn">${t('torrentio.back')}</button>
       <div class="torrentio-stream-header-info">
-        ${item.poster ? `<img class="torrentio-stream-poster" src="${item.poster}" alt="">` : ''}
+        ${item.poster ? `<img class="torrentio-stream-poster" src="${esc(item.poster)}" alt="">` : ''}
         <div>
-          <div class="torrentio-stream-title">${item.title}</div>
-          ${item.year ? `<div class="torrentio-stream-year">${item.year}</div>` : ''}
+          <div class="torrentio-stream-title">${esc(item.title)}</div>
+          ${item.year ? `<div class="torrentio-stream-year">${esc(String(item.year))}</div>` : ''}
         </div>
       </div>
     </div>
@@ -644,11 +648,11 @@ function renderStreamRows(container, streams) {
     row.className = s.debrid ? 'torrentio-stream torrentio-stream-debrid' : 'torrentio-stream';
     const qualityClass = s.quality ? `q-${s.quality.toLowerCase().replace(/[^a-z0-9]/g, '')}` : '';
     row.innerHTML = `
-      ${s.quality ? `<span class="search-quality ${qualityClass}">${s.quality}</span>` : ''}
-      <span class="torrentio-stream-name" title="${s.fileName}">${s.fileName}</span>
+      ${s.quality ? `<span class="search-quality ${qualityClass}">${esc(s.quality)}</span>` : ''}
+      <span class="torrentio-stream-name" title="${esc(s.fileName)}">${esc(s.fileName)}</span>
       ${s.debrid ? '<span class="torrentio-debrid-badge">🔒 Debrid</span>' : ''}
-      ${!s.debrid && s.seeders != null ? `<span class="search-seeds ${seedsClass(s.seeders)}">↑ ${s.seeders}</span>` : ''}
-      ${s.size ? `<span class="torrentio-stream-size">${s.size}</span>` : ''}
+      ${!s.debrid && s.seeders != null ? `<span class="search-seeds ${seedsClass(s.seeders)}">↑ ${Number(s.seeders)}</span>` : ''}
+      ${s.size ? `<span class="torrentio-stream-size">${esc(s.size)}</span>` : ''}
     `;
     if (!s.debrid) row.addEventListener('click', () => doAdd(s.magnet));
     container.appendChild(row);
@@ -668,10 +672,10 @@ async function fetchAndRenderTorrentioStreams(id, type, season, episode, item) {
       <div class="torrentio-back">
         <button id="torrentio-back-btn">${t('torrentio.back')}</button>
         <div class="torrentio-stream-header-info">
-          ${item.poster ? `<img class="torrentio-stream-poster" src="${item.poster}" alt="">` : ''}
+          ${item.poster ? `<img class="torrentio-stream-poster" src="${esc(item.poster)}" alt="">` : ''}
           <div>
-            <div class="torrentio-stream-title">${item.title}</div>
-            ${item.year ? `<div class="torrentio-stream-year">${item.year}</div>` : ''}
+            <div class="torrentio-stream-title">${esc(item.title)}</div>
+            ${item.year ? `<div class="torrentio-stream-year">${esc(String(item.year))}</div>` : ''}
           </div>
         </div>
       </div>
@@ -726,7 +730,9 @@ async function doAdd(source) {
     if (r.videoFiles?.length > 1) openFilePicker(r.id, r.videoFiles);
   } catch (err) {
     pendingTorrents.delete(pid);
-    toast(err.message, true);
+    renderList();
+    const msg = err.message === 'already_downloading' ? t('toast.alreadyActive') : err.message;
+    toast(msg, err.message !== 'already_downloading');
   }
 }
 
@@ -823,7 +829,7 @@ function createCard(torrent) {
     <div class="card-body">
       <div class="card-top">
         <span class="drag-handle" title="${t('drag.handle')}">${ICONS.grip}</span>
-        <span class="card-name" title="${torrent.name}">${torrent.name}</span>
+        <span class="card-name" title="${esc(torrent.name)}">${esc(torrent.name)}</span>
         <span class="queue-badge hidden"></span>
         <span class="card-size">${fmtSize(torrent.size)}</span>
       </div>
@@ -1047,7 +1053,7 @@ async function openCastPicker(id) {
       for (const d of devices) {
         const item = document.createElement('button');
         item.className = 'file-item';
-        item.innerHTML = `<span class="file-item-name">📺 ${d.name}</span><span class="file-item-size">${d.host}</span>`;
+        item.innerHTML = `<span class="file-item-name">📺 ${esc(d.name)}</span><span class="file-item-size">${esc(d.host)}</span>`;
         item.addEventListener('click', async () => {
           closeCastModal();
           try {
@@ -1082,7 +1088,7 @@ function openFilePicker(torrentId, files) {
   for (const f of files) {
     const item = document.createElement('button');
     item.className = 'file-item';
-    item.innerHTML = `<span class="file-item-name">${f.name}</span><span class="file-item-size">${fmtSize(f.size)}</span>`;
+    item.innerHTML = `<span class="file-item-name">${esc(f.name)}</span><span class="file-item-size">${fmtSize(f.size)}</span>`;
     item.addEventListener('click', async () => {
       try {
         await window.api.changeFile(torrentId, f.index);
@@ -1155,12 +1161,12 @@ async function renderHistory() {
     card.className = 'lib-card';
 
     const posterHTML = item.poster
-      ? `<img class="lib-poster" src="${item.poster}" alt="">`
+      ? `<img class="lib-poster" src="${esc(item.poster)}" alt="">`
       : `<div class="lib-no-poster"></div>`;
 
-    const ratingBadge = item.rating ? `<div class="lib-rating">⭐ ${item.rating}</div>` : '';
+    const ratingBadge = item.rating ? `<div class="lib-rating">⭐ ${esc(String(item.rating))}</div>` : '';
     const activeBadge = item.type === 'active' ? `<div class="lib-active-badge">✓</div>` : '';
-    const yearLine    = item.year ? `<div class="lib-info-year">${item.year}</div>` : '';
+    const yearLine    = item.year ? `<div class="lib-info-year">${esc(String(item.year))}</div>` : '';
 
     const actionBtn = item.type === 'active'
       ? `<button class="btn-lib-play">${t('card.play')}</button>`
@@ -1171,7 +1177,7 @@ async function renderHistory() {
       ${ratingBadge}
       ${activeBadge}
       <div class="lib-info">
-        <div class="lib-info-title">${item.title || item.name}</div>
+        <div class="lib-info-title">${esc(item.title || item.name)}</div>
         ${yearLine}
       </div>
       <div class="lib-overlay">
@@ -1366,7 +1372,7 @@ function toast(msg, isError = false) {
 
 async function initWinCtrl() {
   const btnMax = document.getElementById('btn-maximize');
-  const setMaxIcon = (isMax) => { btnMax.innerHTML = isMax ? '&#x29C9;' : '&#x25A1;'; };
+  const setMaxIcon = (isMax) => { btnMax.textContent = isMax ? '⧉' : '▢'; };
 
   setMaxIcon(await window.api.isMaximized());
   window.api.onMaximize(setMaxIcon);
