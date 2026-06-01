@@ -4,7 +4,9 @@
   <meta charset="UTF-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://*.accel.li https://img.yts.mx https://*.yts.mx https://*.yts1.net https://*.torrentbay.net https://static.tvmaze.com https://cdn.myanimelist.net https://kitsu.io; connect-src 'self' https://movies-api.accel.li https://api.tvmaze.com https://api.jikan.moe; frame-ancestors 'none'; base-uri 'self';">
   <title>TorrentPlayer</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/views.css">
 </head>
 <body>
   <div id="app">
@@ -373,6 +375,9 @@
   </div>
 
   <script src="i18n.js"></script>
+  <script src="lib/format.js"></script>
+  <script src="lib/browse.js"></script>
+  <script src="lib/library.js"></script>
   <script src="renderer.js"></script>
 </body>
 </html>
