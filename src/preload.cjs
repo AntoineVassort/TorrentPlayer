@@ -2,7 +2,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
-  addTorrent:        (src)        => ipcRenderer.invoke('torrent:add', src),
+  addTorrent:        (src, resumePos) => ipcRenderer.invoke('torrent:add', src, resumePos),
   changeFile:        (id, idx)    => ipcRenderer.invoke('torrent:changeFile', id, idx),
   playTorrent:       (id)         => ipcRenderer.invoke('torrent:play', id),
   playLocal:         (id)         => ipcRenderer.invoke('torrent:playLocal', id),

@@ -114,6 +114,10 @@
         <span class="logo" data-i18n="history.title">Library</span>
       </header>
       <div id="history-content">
+        <div id="continue-section" class="hidden">
+          <h3 class="lib-section-title" data-i18n="lib.continue">Continue Watching</h3>
+          <div id="continue-grid"></div>
+        </div>
         <div id="library-toolbar">
           <div class="filter-group">
             <button class="filter-btn active" data-lib-filter="all" data-i18n="filter.all">All</button>
@@ -126,6 +130,7 @@
             <option value="rating" data-i18n="sort.rating">Rating</option>
           </select>
         </div>
+        <h3 class="lib-section-title" id="lib-all-title" data-i18n="lib.all">All</h3>
         <div id="library-grid"></div>
         <div id="history-empty" class="hidden">
           <div class="empty-icon">🎬</div>
@@ -239,6 +244,22 @@
       <div id="detail-streams-area"></div>
     </div>
 
+  </div>
+
+  <!-- Modal Disclaimer (premier lancement) -->
+  <div id="disclaimer-modal" class="modal-overlay hidden">
+    <div class="modal disclaimer-modal">
+      <div class="disclaimer-body">
+        <img class="about-icon" src="../assets/tray.png" alt="">
+        <div class="about-name" data-i18n="disclaimer.title">Welcome to TorrentPlayer</div>
+        <p class="disclaimer-text" data-i18n="disclaimer.body">TorrentPlayer is a streaming tool. It includes no content and no tracker. You are solely responsible for the content you access and must comply with the laws of your country. Only download content you have the right to access.</p>
+        <label class="checkbox-label disclaimer-check">
+          <input type="checkbox" id="disclaimer-agree">
+          <span data-i18n="disclaimer.agree">I understand and accept</span>
+        </label>
+        <button id="disclaimer-accept" class="btn-primary" disabled data-i18n="disclaimer.continue">Continue</button>
+      </div>
+    </div>
   </div>
 
   <!-- Modal À propos -->

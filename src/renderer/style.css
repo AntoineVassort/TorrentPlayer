@@ -736,6 +736,51 @@ header button:hover { color: var(--text); background: var(--border); }
   gap: 16px;
 }
 
+/* ── Library sections ─────────────────────────────────── */
+.lib-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  margin: 4px 0 12px;
+}
+#continue-section { margin-bottom: 22px; }
+#continue-grid {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  scroll-snap-type: x proximity;
+}
+#continue-grid::-webkit-scrollbar { height: 5px; }
+#continue-grid::-webkit-scrollbar-track { background: transparent; }
+#continue-grid::-webkit-scrollbar-thumb { background: var(--border-h); border-radius: 3px; }
+#continue-grid .lib-card {
+  flex: 0 0 132px;
+  width: 132px;
+  scroll-snap-align: start;
+  animation: none;
+}
+
+/* Watch progress bar on poster */
+.lib-progress {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 3px;
+  background: rgba(0,0,0,0.55);
+  z-index: 3;
+}
+.lib-progress-fill {
+  height: 100%;
+  background: var(--red);
+  box-shadow: 0 0 6px rgba(229,9,20,0.5);
+}
+.btn-lib-resume {
+  font-size: 10px !important;
+  white-space: nowrap;
+}
+
 @keyframes cardIn {
   from { opacity: 0; transform: scale(0.94) translateY(8px); }
   to   { opacity: 1; transform: scale(1) translateY(0); }
@@ -1324,6 +1369,34 @@ section h2 {
   padding: 24px;
   font-size: 13px;
 }
+/* ── Disclaimer modal ────────────────────────────────── */
+.disclaimer-modal { width: 380px; }
+.disclaimer-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 30px 28px 26px;
+  gap: 14px;
+  text-align: center;
+}
+.disclaimer-text {
+  font-size: 12px;
+  color: var(--muted-h);
+  line-height: 1.65;
+  margin-top: 2px;
+}
+.disclaimer-check {
+  align-self: center;
+  font-size: 12px;
+}
+#disclaimer-accept { width: 100%; margin-top: 4px; }
+#disclaimer-accept:disabled {
+  background: var(--border);
+  color: var(--muted);
+  cursor: default;
+  box-shadow: none;
+}
+
 /* ── About modal ─────────────────────────────────────── */
 .about-modal { width: 320px; }
 .about-body {
@@ -1634,6 +1707,28 @@ section h2 {
   background: var(--red);
   border-radius: 3px;
   box-shadow: 0 0 10px rgba(229,9,20,0.6);
+}
+
+/* ── Stalled torrent ─────────────────────────────────── */
+@keyframes stallPulse {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 1; }
+}
+.card.stalled {
+  border-color: rgba(251,146,60,0.35) !important;
+}
+.card.stalled::before {
+  content: '';
+  position: absolute;
+  left: -1px; top: 14px; bottom: 14px;
+  width: 3px;
+  background: #fb923c;
+  border-radius: 3px;
+  animation: stallPulse 1.6s ease-in-out infinite;
+}
+.peers-stalled {
+  color: #fb923c !important;
+  font-weight: 600;
 }
 
 /* ── Skeleton loading ────────────────────────────────── */

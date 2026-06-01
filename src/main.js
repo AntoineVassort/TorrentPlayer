@@ -231,8 +231,10 @@ function connectMpvIPC(id) {
     socket.on('close', () => {
       if (!entry.playback) return;
       entry.resumePos = entry.playback.pos > 5 ? entry.playback.pos : null;
+      entry.resumeDuration = entry.playback.duration || entry.resumeDuration || null;
       entry.playback = null;
       saveSession();
+      persistWatchProgress(id);
     });
 
     socket.on('error', () => {
@@ -242,6 +244,24 @@ function connectMpvIPC(id) {
   };
 
   setTimeout(tryConnect, 500);
+}
+
+// --- Watch progress (Continue Watching) ---
+
+function persistWatchProgress(id) {
+  const entry = active.get(id);
+  if (!entry || !entry.resumePos) return;
+  const magnet = entry.magnet || entry.torrent.magnetURI;
+  if (!magnet) return;
+  addEntry(app.getPath('userData'), {
+    id,
+    name: entry.fileState.file?.name || entry.torrent.name,
+    magnet,
+    watchedAt: new Date().toISOString(),
+    resumePos: entry.resumePos,
+    resumeDuration: entry.resumeDuration || null,
+    ...(entry.meta || {}),
+  });
 }
 
 // --- Add torrent (shared logic) ---
@@ -341,7 +361,7 @@ app.whenReady().then(async () => {
   setInterval(() => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
 
-    const state = [...active.values()].map(({ torrent, fileState, port, speedHistory, playback, resumePos, meta, casting }) => {
+    const state = [...active.values()].map(({ torrent, fileState, port, speedHistory, playback, resumePos, resumeDuration, meta, casting }) => {
       speedHistory.push(torrent.downloadSpeed);
       if (speedHistory.length > 30) speedHistory.shift();
 
@@ -364,6 +384,7 @@ app.whenReady().then(async () => {
         speedHistory: [...speedHistory],
         playback: playback ? { pos: playback.pos, duration: playback.duration } : null,
         resumePos: resumePos || null,
+        resumeDuration: resumeDuration || null,
         port,
         meta: meta || null,
         queuePos: queueOrder.indexOf(torrent.infoHash),
@@ -441,8 +462,9 @@ app.on('window-all-closed', () => {
 
 // --- IPC ---
 
-ipcMain.handle('torrent:add', async (_, source) => {
+ipcMain.handle('torrent:add', async (_, source, resumePos = null) => {
   if (typeof source !== 'string' || !source.trim()) throw new Error('Invalid source');
+  const resume = (typeof resumePos === 'number' && resumePos > 5) ? resumePos : null;
 
   let torrentId = source;
   const magnet = source.startsWith('magnet:') ? source : null;
@@ -461,7 +483,7 @@ ipcMain.handle('torrent:add', async (_, source) => {
     catch (e) { throw new Error(`Impossible de lire le fichier : ${e.message}`); }
   }
   const settings = getSettings(app.getPath('userData'));
-  const result = await addTorrentInternal(torrentId, magnet, settings.downloadDir);
+  const result = await addTorrentInternal(torrentId, magnet, settings.downloadDir, resume);
   if (active.has(result.id) && queueOrder.includes(result.id)) throw new Error('already_downloading');
 
   if (!queueOrder.includes(result.id)) {
@@ -584,6 +606,8 @@ ipcMain.handle('torrent:remove', (_, id) => {
       name: entry.fileState.file?.name || entry.torrent.name,
       magnet,
       watchedAt: new Date().toISOString(),
+      resumePos: entry.resumePos || null,
+      resumeDuration: entry.resumeDuration || null,
       ...(entry.meta || {}),
     });
   }

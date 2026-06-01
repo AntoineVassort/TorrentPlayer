@@ -49,6 +49,24 @@ async function init() {
   if (!settings.player && players.length === 0) {
     document.getElementById('no-player-banner').classList.remove('hidden');
   }
+  if (!settings.acceptedDisclaimer) showDisclaimer();
+}
+
+// --- Disclaimer ---
+
+function showDisclaimer() {
+  const modal = document.getElementById('disclaimer-modal');
+  const agree = document.getElementById('disclaimer-agree');
+  const accept = document.getElementById('disclaimer-accept');
+  agree.checked = false;
+  accept.disabled = true;
+  agree.onchange = () => { accept.disabled = !agree.checked; };
+  accept.onclick = async () => {
+    settings = { ...settings, acceptedDisclaimer: true };
+    await window.api.saveSettings(settings);
+    modal.classList.add('hidden');
+  };
+  modal.classList.remove('hidden');
 }
 
 // --- UI bindings ---
@@ -711,7 +729,7 @@ async function handleAdd() {
   doAdd(val);
 }
 
-async function doAdd(source) {
+async function doAdd(source, resumePos = null) {
   const pid = 'pending-' + Date.now();
   pendingTorrents.set(pid, {
     id: pid, name: t('card.buffering'), connecting: true,
@@ -724,7 +742,7 @@ async function doAdd(source) {
   });
   renderList();
   try {
-    const r = await window.api.addTorrent(source);
+    const r = await window.api.addTorrent(source, resumePos);
     pendingTorrents.delete(pid);
     toast(t('toast.added', { name: r.name }));
     if (r.videoFiles?.length > 1) openFilePicker(r.id, r.videoFiles);
@@ -940,12 +958,22 @@ function updateCard(card, torrent) {
   card.querySelector('.eta').textContent = torrent.done ? '' : fmtETA(torrent.timeRemaining);
   card.querySelector('.dl').textContent = torrent.done ? '' : `↓ ${fmt(torrent.downloadSpeed)}`;
 
+  // Stall detection — no peers and no speed while still downloading
+  const stalled = !torrent.done && torrent.numPeers === 0 && torrent.downloadSpeed === 0;
+  card.classList.toggle('stalled', stalled);
+
   // Peers — show upload when done + seeding
   const peersEl = card.querySelector('.peers');
-  if (torrent.done && !torrent.paused && torrent.uploadSpeed > 0) {
-    peersEl.textContent = `↑ ${fmt(torrent.uploadSpeed)} · ${torrent.numPeers}p`;
+  if (stalled) {
+    peersEl.textContent = t('card.stalled');
+    peersEl.classList.add('peers-stalled');
   } else {
-    peersEl.textContent = `${torrent.numPeers} peers`;
+    peersEl.classList.remove('peers-stalled');
+    if (torrent.done && !torrent.paused && torrent.uploadSpeed > 0) {
+      peersEl.textContent = `↑ ${fmt(torrent.uploadSpeed)} · ${torrent.numPeers}p`;
+    } else {
+      peersEl.textContent = `${torrent.numPeers} peers`;
+    }
   }
 
   card.querySelector('.sub-badge').classList.toggle('hidden', !torrent.hasSubtitle);
@@ -1123,10 +1151,127 @@ function isSeries(name) {
   return /\b[Ss]\d{1,2}[Ee]\d{1,2}\b/.test(name || '');
 }
 
+function watchFraction(item) {
+  if (item.resumePos > 0 && item.resumeDuration > 0) {
+    return Math.min(item.resumePos / item.resumeDuration, 1);
+  }
+  return 0;
+}
+
+function isResumable(item) {
+  const f = watchFraction(item);
+  return f > 0.01 && f < 0.95;
+}
+
+function createLibCard(item, onRemove) {
+  const card = document.createElement('div');
+  card.className = 'lib-card';
+
+  const posterHTML = item.poster
+    ? `<img class="lib-poster" src="${esc(item.poster)}" alt="">`
+    : `<div class="lib-no-poster"></div>`;
+
+  const ratingBadge = item.rating ? `<div class="lib-rating">⭐ ${esc(String(item.rating))}</div>` : '';
+  const activeBadge = item.type === 'active' ? `<div class="lib-active-badge">✓</div>` : '';
+  const yearLine    = item.year ? `<div class="lib-info-year">${esc(String(item.year))}</div>` : '';
+
+  const frac = watchFraction(item);
+  const progressBar = frac > 0.01
+    ? `<div class="lib-progress"><div class="lib-progress-fill" style="width:${(frac * 100).toFixed(1)}%"></div></div>`
+    : '';
+
+  // Resumable history entries get a Resume button; active get Play; others Re-download
+  let actionBtn;
+  if (item.type === 'active') {
+    actionBtn = `<button class="btn-lib-play">${item.resumePos > 5 ? t('lib.resume', { time: fmtTime(item.resumePos) }) : t('card.play')}</button>`;
+  } else if (item.magnet && isResumable(item)) {
+    actionBtn = `<button class="btn-lib-resume">↩ ${fmtTime(item.resumePos)}</button>`;
+  } else if (item.magnet) {
+    actionBtn = `<button class="btn-lib-redownload">↩</button>`;
+  } else {
+    actionBtn = '';
+  }
+
+  card.innerHTML = `
+    ${posterHTML}
+    ${ratingBadge}
+    ${activeBadge}
+    ${progressBar}
+    <div class="lib-info">
+      <div class="lib-info-title">${esc(item.title || item.name)}</div>
+      ${yearLine}
+    </div>
+    <div class="lib-overlay">
+      <div class="lib-overlay-actions">
+        ${actionBtn}
+        <button class="btn-lib-remove">✕</button>
+      </div>
+    </div>
+  `;
+
+  if (item.type === 'active') {
+    card.querySelector('.btn-lib-play')?.addEventListener('click', e => {
+      e.stopPropagation();
+      window.api.playTorrent(item.id);
+    });
+    card.querySelector('.btn-lib-remove').addEventListener('click', e => {
+      e.stopPropagation();
+      window.api.removeTorrent(item.id);
+      onRemove(card);
+    });
+  } else {
+    const resumeOrRedl = card.querySelector('.btn-lib-resume') || card.querySelector('.btn-lib-redownload');
+    resumeOrRedl?.addEventListener('click', e => {
+      e.stopPropagation();
+      const resume = isResumable(item) ? item.resumePos : null;
+      doAdd(item.magnet, resume);
+      closeHistory();
+      toast(t('toast.added', { name: item.name }));
+    });
+    card.querySelector('.btn-lib-remove').addEventListener('click', async e => {
+      e.stopPropagation();
+      await window.api.removeHistory(item.id);
+      onRemove(card);
+    });
+  }
+
+  if (!item.poster && item.type === 'history') {
+    window.api.fetchHistoryMeta(item.id, item.name).then(meta => {
+      if (!meta?.poster) return;
+      const placeholder = card.querySelector('.lib-no-poster');
+      if (placeholder) {
+        const img = document.createElement('img');
+        img.className = 'lib-poster';
+        img.src = meta.poster;
+        img.alt = '';
+        placeholder.replaceWith(img);
+      }
+      if (meta.title) card.querySelector('.lib-info-title').textContent = meta.title;
+      if (meta.year && !card.querySelector('.lib-info-year')) {
+        const y = document.createElement('div');
+        y.className = 'lib-info-year';
+        y.textContent = meta.year;
+        card.querySelector('.lib-info').appendChild(y);
+      }
+      if (meta.rating && !card.querySelector('.lib-rating')) {
+        const r = document.createElement('div');
+        r.className = 'lib-rating';
+        r.textContent = `⭐ ${meta.rating}`;
+        card.appendChild(r);
+      }
+    }).catch(() => {});
+  }
+
+  return card;
+}
+
 async function renderHistory() {
   const grid = document.getElementById('library-grid');
   const empty = document.getElementById('history-empty');
+  const continueSection = document.getElementById('continue-section');
+  const continueGrid = document.getElementById('continue-grid');
   grid.textContent = '';
+  continueGrid.textContent = '';
 
   let history = [];
   try { history = await window.api.getHistory(); } catch {}
@@ -1141,6 +1286,8 @@ async function renderHistory() {
       rating: t.meta?.rating || null,
       name: t.name,
       watchedAt: null,
+      resumePos: t.resumePos || null,
+      resumeDuration: t.resumeDuration || null,
     })),
     ...history.map(e => ({ type: 'history', ...e })),
   ];
@@ -1156,92 +1303,21 @@ async function renderHistory() {
 
   empty.classList.toggle('hidden', items.length > 0);
 
+  // Continue Watching shelf — resumable items (deduped by id)
+  const continueItems = items.filter(isResumable);
+  continueSection.classList.toggle('hidden', continueItems.length === 0);
+  document.getElementById('lib-all-title').classList.toggle('hidden', items.length === 0);
+
+  const onRemove = (card) => {
+    card.remove();
+    if (!grid.children.length) empty.classList.remove('hidden');
+  };
+
+  for (const item of continueItems) {
+    continueGrid.appendChild(createLibCard(item, () => renderHistory()));
+  }
   for (const item of items) {
-    const card = document.createElement('div');
-    card.className = 'lib-card';
-
-    const posterHTML = item.poster
-      ? `<img class="lib-poster" src="${esc(item.poster)}" alt="">`
-      : `<div class="lib-no-poster"></div>`;
-
-    const ratingBadge = item.rating ? `<div class="lib-rating">⭐ ${esc(String(item.rating))}</div>` : '';
-    const activeBadge = item.type === 'active' ? `<div class="lib-active-badge">✓</div>` : '';
-    const yearLine    = item.year ? `<div class="lib-info-year">${esc(String(item.year))}</div>` : '';
-
-    const actionBtn = item.type === 'active'
-      ? `<button class="btn-lib-play">${t('card.play')}</button>`
-      : (item.magnet ? `<button class="btn-lib-redownload">↩</button>` : '');
-
-    card.innerHTML = `
-      ${posterHTML}
-      ${ratingBadge}
-      ${activeBadge}
-      <div class="lib-info">
-        <div class="lib-info-title">${esc(item.title || item.name)}</div>
-        ${yearLine}
-      </div>
-      <div class="lib-overlay">
-        <div class="lib-overlay-actions">
-          ${actionBtn}
-          <button class="btn-lib-remove">✕</button>
-        </div>
-      </div>
-    `;
-
-    if (item.type === 'active') {
-      card.querySelector('.btn-lib-play')?.addEventListener('click', e => {
-        e.stopPropagation();
-        window.api.playTorrent(item.id);
-      });
-      card.querySelector('.btn-lib-remove').addEventListener('click', e => {
-        e.stopPropagation();
-        window.api.removeTorrent(item.id);
-        card.remove();
-        if (!grid.children.length) empty.classList.remove('hidden');
-      });
-    } else {
-      card.querySelector('.btn-lib-redownload')?.addEventListener('click', e => {
-        e.stopPropagation();
-        doAdd(item.magnet);
-        closeHistory();
-        toast(t('toast.added', { name: item.name }));
-      });
-      card.querySelector('.btn-lib-remove').addEventListener('click', async e => {
-        e.stopPropagation();
-        await window.api.removeHistory(item.id);
-        card.remove();
-        if (!grid.children.length) empty.classList.remove('hidden');
-      });
-    }
-
-    grid.appendChild(card);
-
-    if (!item.poster && item.type === 'history') {
-      window.api.fetchHistoryMeta(item.id, item.name).then(meta => {
-        if (!meta?.poster) return;
-        const placeholder = card.querySelector('.lib-no-poster');
-        if (placeholder) {
-          const img = document.createElement('img');
-          img.className = 'lib-poster';
-          img.src = meta.poster;
-          img.alt = '';
-          placeholder.replaceWith(img);
-        }
-        if (meta.title) card.querySelector('.lib-info-title').textContent = meta.title;
-        if (meta.year && !card.querySelector('.lib-info-year')) {
-          const y = document.createElement('div');
-          y.className = 'lib-info-year';
-          y.textContent = meta.year;
-          card.querySelector('.lib-info').appendChild(y);
-        }
-        if (meta.rating && !card.querySelector('.lib-rating')) {
-          const r = document.createElement('div');
-          r.className = 'lib-rating';
-          r.textContent = `⭐ ${meta.rating}`;
-          card.appendChild(r);
-        }
-      }).catch(() => {});
-    }
+    grid.appendChild(createLibCard(item, onRemove));
   }
 }
 
