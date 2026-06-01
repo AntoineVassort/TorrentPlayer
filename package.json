@@ -1,6 +1,6 @@
 {
   "name": "torrent-player",
-  "version": "1.6.0",
+  "version": "1.5.1",
   "description": "Stream torrents via an external player",
   "type": "module",
   "main": "src/main.js",

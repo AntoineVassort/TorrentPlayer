@@ -65,8 +65,46 @@ function showDisclaimer() {
     settings = { ...settings, acceptedDisclaimer: true };
     await window.api.saveSettings(settings);
     modal.classList.add('hidden');
+    if (!settings.player) showPlayerSetup();
   };
   modal.classList.remove('hidden');
+}
+
+// --- Player setup wizard ---
+
+function showPlayerSetup() {
+  renderPlayerSetupList();
+  document.getElementById('player-setup-modal').classList.remove('hidden');
+}
+
+function closePlayerSetup() {
+  document.getElementById('player-setup-modal').classList.add('hidden');
+}
+
+function renderPlayerSetupList() {
+  const list = document.getElementById('player-setup-list');
+  const none = document.getElementById('player-setup-none');
+  list.innerHTML = '';
+  if (players.length) {
+    none.classList.add('hidden');
+    for (const p of players) {
+      const btn = document.createElement('button');
+      btn.className = 'player-setup-item';
+      btn.innerHTML = `<span class="player-setup-name">${esc(p.name)}</span><span class="player-setup-path">${esc(p.path)}</span>`;
+      btn.addEventListener('click', () => applySetupPlayer({ path: p.path, args: p.args || [] }, p.name));
+      list.appendChild(btn);
+    }
+  } else {
+    none.classList.remove('hidden');
+  }
+}
+
+async function applySetupPlayer(player, name) {
+  settings = { ...settings, player };
+  await window.api.saveSettings(settings);
+  document.getElementById('no-player-banner').classList.add('hidden');
+  closePlayerSetup();
+  toast(t('toast.playerSet', { name }));
 }
 
 // --- UI bindings ---
@@ -160,7 +198,7 @@ function bindUI() {
     if (file?.name.endsWith('.torrent')) doAdd(file.path);
   });
 
-  document.getElementById('banner-open-settings').addEventListener('click', openSettings);
+  document.getElementById('banner-open-settings').addEventListener('click', showPlayerSetup);
   document.getElementById('settings-btn').addEventListener('click', openSettings);
   document.getElementById('back-btn').addEventListener('click', closeSettings);
   document.getElementById('save-btn').addEventListener('click', saveSettings);
@@ -220,6 +258,32 @@ function bindUI() {
     if (e.target === document.getElementById('cast-modal')) closeCastModal();
   });
 
+  // Player setup wizard
+  document.getElementById('player-setup-close').addEventListener('click', closePlayerSetup);
+  document.getElementById('player-setup-skip').addEventListener('click', closePlayerSetup);
+  document.getElementById('player-setup-rescan').addEventListener('click', async () => {
+    players = await window.api.detectPlayers();
+    renderPlayerSetupList();
+  });
+  document.getElementById('player-setup-browse').addEventListener('click', async () => {
+    const p = await window.api.openPlayerDialog();
+    if (!p) return;
+    applySetupPlayer({ path: p, args: [] }, p.split(/[\\/]/).pop());
+  });
+
+  // External links (settings hints, install buttons)
+  const LINKS = {
+    opensubtitles: 'https://www.opensubtitles.com/en/consumers',
+    mpv: 'https://mpv.io/installation/',
+    vlc: 'https://www.videolan.org/vlc/',
+  };
+  document.addEventListener('click', e => {
+    const el = e.target.closest('[data-link]');
+    if (!el) return;
+    const url = LINKS[el.dataset.link];
+    if (url) window.api.openExternal(url);
+  });
+
   document.getElementById('clipboard-add').addEventListener('click', () => {
     if (pendingClipboardMagnet) doAdd(pendingClipboardMagnet);
     hideClipboardBanner();
@@ -228,6 +292,7 @@ function bindUI() {
 
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
+      if (!document.getElementById('player-setup-modal').classList.contains('hidden')) { closePlayerSetup(); return; }
       if (!document.getElementById('cast-modal').classList.contains('hidden')) { closeCastModal(); return; }
       if (!document.getElementById('file-modal').classList.contains('hidden')) { closeFilePicker(); return; }
       if (!document.getElementById('clipboard-banner').classList.contains('hidden')) { hideClipboardBanner(); return; }
@@ -1372,6 +1437,8 @@ function populateSettings() {
   document.getElementById('max-download').value = settings.maxDownload || '';
   document.getElementById('max-upload').value = settings.maxUpload || '';
   document.getElementById('torrentio-url').value = settings.torrentioUrl || '';
+  document.getElementById('subtitle-language').value = settings.subtitleLanguage || 'off';
+  document.getElementById('opensubtitles-key').value = settings.openSubtitlesApiKey || '';
 
   if (settings.player) {
     const match = players.find(p => p.path === settings.player.path);
@@ -1418,6 +1485,8 @@ async function saveSettings() {
   const maxUl = parseInt(document.getElementById('max-upload').value) || 0;
   const language = document.getElementById('language-select').value;
   const torrentioUrl = document.getElementById('torrentio-url').value.trim();
+  const subtitleLanguage = document.getElementById('subtitle-language').value;
+  const openSubtitlesApiKey = document.getElementById('opensubtitles-key').value.trim();
 
   settings = {
     ...settings,
@@ -1428,6 +1497,8 @@ async function saveSettings() {
     maxUpload: maxUl || null,
     language,
     torrentioUrl: torrentioUrl || null,
+    subtitleLanguage,
+    openSubtitlesApiKey: openSubtitlesApiKey || null,
   };
   await window.api.saveSettings(settings);
   toast(t('toast.settingsSaved'));

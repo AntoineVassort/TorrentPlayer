@@ -10,6 +10,7 @@ import { detect } from './playerDetector.js';
 import { getSettings, saveSettings } from './settings.js';
 import { addEntry, loadHistory, removeEntry, updateEntry } from './history.js';
 import { discoverDevices, castMedia, getLocalIP } from './chromecast.js';
+import { fetchSubtitle, cleanReleaseName, parseSeasonEpisode } from './subtitles.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -244,6 +245,38 @@ function connectMpvIPC(id) {
   };
 
   setTimeout(tryConnect, 500);
+}
+
+// --- Subtitles (OpenSubtitles auto-fetch) ---
+
+async function ensureSubtitle(entry, settings) {
+  if (entry.fileState.subtitle) return null;            // embedded .srt present
+  if (entry.fetchedSubPath && fs.existsSync(entry.fetchedSubPath)) return entry.fetchedSubPath;
+
+  const lang = settings.subtitleLanguage;
+  const key = settings.openSubtitlesApiKey;
+  if (!lang || lang === 'off' || !key) return null;
+
+  try {
+    const fileName = entry.fileState.file?.name || entry.torrent.name;
+    const { season, episode } = parseSeasonEpisode(fileName);
+    const result = await fetchSubtitle(key, {
+      query: cleanReleaseName(fileName),
+      language: lang,
+      season,
+      episode,
+      userAgent: `TorrentPlayer v${app.getVersion()}`,
+    });
+    if (!result) return null;
+
+    const videoFull = path.join(entry.torrent.path, entry.fileState.file.path);
+    const dir = path.dirname(videoFull);
+    const base = path.basename(videoFull, path.extname(videoFull));
+    const subPath = path.join(dir, `${base}.${lang}.srt`);
+    fs.writeFileSync(subPath, result.text, 'utf8');
+    entry.fetchedSubPath = subPath;
+    return subPath;
+  } catch { return null; }
 }
 
 // --- Watch progress (Continue Watching) ---
@@ -523,7 +556,7 @@ async function deleteTorrentFiles(torrent) {
   }
 }
 
-ipcMain.handle('torrent:play', (_, id) => {
+ipcMain.handle('torrent:play', async (_, id) => {
   const entry = active.get(id);
   if (!entry) throw new Error('Torrent introuvable');
 
@@ -540,6 +573,9 @@ ipcMain.handle('torrent:play', (_, id) => {
       entry.fileState.subtitle.path
     );
     if (fs.existsSync(subPath)) subArgs.push(`--sub-file=${subPath}`);
+  } else {
+    const fetched = await ensureSubtitle(entry, settings);
+    if (fetched) subArgs.push(`--sub-file=${fetched}`);
   }
 
   const extraArgs = [];
@@ -565,7 +601,7 @@ ipcMain.handle('torrent:stopSeed', (_, id) => {
   return true;
 });
 
-ipcMain.handle('torrent:playLocal', (_, id) => {
+ipcMain.handle('torrent:playLocal', async (_, id) => {
   const entry = active.get(id);
   if (!entry) throw new Error('Torrent introuvable');
 
@@ -581,6 +617,9 @@ ipcMain.handle('torrent:playLocal', (_, id) => {
   if (entry.fileState.subtitle) {
     const subPath = path.join(entry.torrent.path, entry.fileState.subtitle.path);
     if (fs.existsSync(subPath)) subArgs.push(`--sub-file=${subPath}`);
+  } else {
+    const fetched = await ensureSubtitle(entry, settings);
+    if (fetched) subArgs.push(`--sub-file=${fetched}`);
   }
 
   const extraArgs = [];

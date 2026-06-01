@@ -10,6 +10,8 @@ export function getDefaults(userDataPath) {
     deleteAfterPlay: false,
     windowBounds: null,
     language: 'en',
+    subtitleLanguage: 'off',
+    openSubtitlesApiKey: null,
   };
 }
 

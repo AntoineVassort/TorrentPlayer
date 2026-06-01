@@ -201,6 +201,30 @@
         </section>
 
         <section>
+          <h2 data-i18n="settings.subtitles">Subtitles</h2>
+          <div class="field-row">
+            <label data-i18n="label.subLang">Language</label>
+            <select id="subtitle-language">
+              <option value="off" data-i18n="sub.off">Off</option>
+              <option value="en">English</option>
+              <option value="fr">Français</option>
+              <option value="es">Español</option>
+              <option value="de">Deutsch</option>
+              <option value="it">Italiano</option>
+              <option value="pt">Português</option>
+              <option value="ru">Русский</option>
+              <option value="ar">العربية</option>
+              <option value="ja">日本語</option>
+            </select>
+          </div>
+          <div class="field-row">
+            <label data-i18n="label.osKey">API key</label>
+            <input id="opensubtitles-key" type="text" data-i18n-placeholder="sub.keyPlaceholder" placeholder="OpenSubtitles API key">
+          </div>
+          <p class="settings-hint" data-i18n-html="settings.subtitlesHint">Free key at <span class="settings-link" data-link="opensubtitles">opensubtitles.com</span>. Auto-fetches when a torrent has no embedded subtitles.</p>
+        </section>
+
+        <section>
           <h2 data-i18n="settings.torrentio">Torrentio</h2>
           <div class="field-row">
             <label data-i18n="label.torrentioUrl">URL</label>
@@ -258,6 +282,32 @@
           <span data-i18n="disclaimer.agree">I understand and accept</span>
         </label>
         <button id="disclaimer-accept" class="btn-primary" disabled data-i18n="disclaimer.continue">Continue</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Player setup (onboarding) -->
+  <div id="player-setup-modal" class="modal-overlay hidden">
+    <div class="modal player-setup-modal">
+      <div class="modal-header">
+        <span data-i18n="setup.title">Choose your video player</span>
+        <button id="player-setup-close">✕</button>
+      </div>
+      <div class="player-setup-body">
+        <p class="player-setup-intro" data-i18n="setup.intro">TorrentPlayer streams through an external player. Pick one of the players found on your machine, or install a recommended one.</p>
+        <div id="player-setup-list"></div>
+        <div id="player-setup-none" class="hidden">
+          <p class="player-setup-none-text" data-i18n="setup.none">No player detected. We recommend installing one of these:</p>
+          <div class="player-setup-install">
+            <button class="player-install-btn" data-link="mpv">mpv</button>
+            <button class="player-install-btn" data-link="vlc">VLC</button>
+          </div>
+        </div>
+        <div class="player-setup-actions">
+          <button id="player-setup-browse" class="btn-secondary" data-i18n="btn.browse">Browse...</button>
+          <button id="player-setup-rescan" class="btn-secondary" data-i18n="btn.rescan">🔄 Re-scan</button>
+          <button id="player-setup-skip" class="btn-secondary" data-i18n="setup.skip">Skip</button>
+        </div>
       </div>
     </div>
   </div>
