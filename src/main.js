@@ -403,7 +403,7 @@ async function maybeOfferNextEpisode(id) {
     label,
     title: ctx.title || null,
     poster: ctx.poster || null,
-    autoPlay: !!settings.autoPlayNext,
+    autoPlay: settings.autoPlayNext !== false,   // default on, matches Settings checkbox
     context: { id: ctx.id, type: ctx.type, season: ctx.season, episode: nextEpisode, title: ctx.title, poster: ctx.poster },
   });
 }
