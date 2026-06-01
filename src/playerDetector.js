@@ -2,7 +2,6 @@
 
 import { execSync } from 'child_process';
 import fs from 'fs';
-import path from 'path';
 
 const PLAYER_PROFILES = {
   mpv:          { args: ['--cache=yes', '--demuxer-max-bytes=500M', '--force-window=immediate'] },

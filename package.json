@@ -7,6 +7,7 @@
   "scripts": {
     "start": "electron .",
     "cli": "node src/index.js",
+    "lint": "eslint .",
     "dist": "electron-packager . TorrentPlayer --platform=win32 --arch=x64 --out=dist --overwrite --ignore=^/dist --ignore=^/\\.claude --ignore=^/\\.github --ignore=^/CLAUDE\\.md --ignore=^/README\\.md --ignore=^/LICENSE --ignore=^/\\.gitignore --ignore=^/\\.gitattributes --ignore=^/tasks --no-asar && node scripts/postbuild.mjs",
     "dist:mac": "electron-packager . TorrentPlayer --platform=darwin --arch=x64,arm64 --out=dist --overwrite --ignore=^/dist --ignore=^/\\.claude --ignore=^/\\.github --ignore=^/CLAUDE\\.md --ignore=^/README\\.md --ignore=^/LICENSE --ignore=^/\\.gitignore --ignore=^/\\.gitattributes --ignore=^/tasks --no-asar && node scripts/postbuild.mjs darwin",
     "dist:linux": "electron-packager . TorrentPlayer --platform=linux --arch=x64 --out=dist --overwrite --ignore=^/dist --ignore=^/\\.claude --ignore=^/\\.github --ignore=^/CLAUDE\\.md --ignore=^/README\\.md --ignore=^/LICENSE --ignore=^/\\.gitignore --ignore=^/\\.gitattributes --ignore=^/tasks --no-asar && node scripts/postbuild.mjs linux"
@@ -18,6 +19,8 @@
   "devDependencies": {
     "@electron/packager": "^20.0.0",
     "electron": "^42.0.1",
+    "eslint": "^10.4.1",
+    "globals": "^17.6.0",
     "sharp": "^0.33.5"
   }
 }

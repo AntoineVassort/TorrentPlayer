@@ -44,12 +44,6 @@ const SUBTITLE_EXTENSIONS = ['.srt', '.ass', '.ssa', '.vtt', '.sub'];
 function isVideo(name)    { return VIDEO_EXTENSIONS.includes(path.extname(name).toLowerCase()); }
 function isSubtitle(name) { return SUBTITLE_EXTENSIONS.includes(path.extname(name).toLowerCase()); }
 
-function pickFile(files) {
-  const videos = files.filter(f => isVideo(f.name));
-  if (!videos.length) return null;
-  return videos.reduce((a, b) => (a.length > b.length ? a : b));
-}
-
 function findSubtitle(files, videoFile) {
   const base = path.basename(videoFile.name, path.extname(videoFile.name)).toLowerCase();
   return files.find(f => {
