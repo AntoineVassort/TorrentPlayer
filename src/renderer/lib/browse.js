@@ -177,18 +177,29 @@ function setupDetailEpPicker(item) {
   newBtn.addEventListener('click', () => {
     const season = isAnime ? null : parseInt(document.getElementById('detail-season').value) || 1;
     const episode = parseInt(document.getElementById('detail-episode').value) || 1;
-    fetchAndRenderDetailStreams(item.id, item.type, season, episode);
+    fetchAndRenderDetailStreams(item.id, item.type, season, episode, item);
   });
 }
 
-async function fetchAndRenderDetailStreams(id, type, season, episode) {
+// Build the episode context passed to doAdd → enables "auto-play next episode".
+// Returns null for movies (nothing to chain).
+function episodeCtx(id, type, season, episode, item) {
+  if (type === 'movie' || episode == null) return null;
+  return {
+    id, type, season, episode,
+    title: item?.title || null,
+    poster: item?.poster || item?.posterUrl || null,
+  };
+}
+
+async function fetchAndRenderDetailStreams(id, type, season, episode, item = null) {
   const container = document.getElementById('detail-streams-area');
   container.innerHTML = `<div class="torrentio-loading">${t('torrentio.loadingStreams')}</div>`;
   try {
     const streams = await window.api.torrentioStreams(id, type, season, episode);
     container.innerHTML = '';
     renderQualityShortcuts(container, streams);
-    renderStreamRows(container, streams);
+    renderStreamRows(container, streams, episodeCtx(id, type, season, episode, item));
   } catch {
     container.innerHTML = `<div class="torrentio-empty">${t('status.networkError')}</div>`;
   }
@@ -380,7 +391,7 @@ async function initCardQualityOverlay(item, overlay) {
   if (!hasAny) overlay.remove();
 }
 
-function renderStreamRows(container, streams) {
+function renderStreamRows(container, streams, episodeContext = null) {
   if (!streams.length) {
     container.insertAdjacentHTML('beforeend', `<div class="torrentio-empty">${t('torrentio.noStreams')}</div>`);
     return;
@@ -398,7 +409,7 @@ function renderStreamRows(container, streams) {
       ${!s.debrid && s.seeders != null ? `<span class="search-seeds ${seedsClass(s.seeders)}">↑ ${Number(s.seeders)}</span>` : ''}
       ${s.size ? `<span class="torrentio-stream-size">${esc(s.size)}</span>` : ''}
     `;
-    if (!s.debrid) row.addEventListener('click', () => doAdd(s.magnet));
+    if (!s.debrid) row.addEventListener('click', () => doAdd(s.magnet, null, episodeContext));
     container.appendChild(row);
   }
   if (debridOnly.length && !playable.length) {
@@ -437,7 +448,7 @@ async function fetchAndRenderTorrentioStreams(id, type, season, episode, item) {
     } else {
       container.innerHTML = '';
     }
-    renderStreamRows(container, streams);
+    renderStreamRows(container, streams, episodeCtx(id, type, season, episode, item));
   } catch {
     container.innerHTML = `<div class="torrentio-empty">${t('status.networkError')}</div>`;
   }

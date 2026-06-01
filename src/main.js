@@ -11,7 +11,7 @@ import { getSettings, saveSettings } from './settings.js';
 import { addEntry, loadHistory, removeEntry, updateEntry } from './history.js';
 import { discoverDevices, castMedia, getLocalIP } from './chromecast.js';
 import { fetchSubtitle, cleanReleaseName, parseSeasonEpisode } from './subtitles.js';
-import { fetchMetaFromCinemeta, registerMetadataIpc } from './metadata.js';
+import { fetchMetaFromCinemeta, registerMetadataIpc, fetchTorrentioStreams, pickBestTorrentioStream } from './metadata.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -186,6 +186,42 @@ function isMpv(playerPath) {
   return path.basename(playerPath).toLowerCase().startsWith('mpv');
 }
 
+function isVlc(playerPath) {
+  return path.basename(playerPath).toLowerCase().startsWith('vlc');
+}
+
+function playerKind(playerPath) {
+  return isMpv(playerPath) ? 'mpv' : isVlc(playerPath) ? 'vlc' : 'other';
+}
+
+// Builds the resume + progress-tracking CLI args for the chosen player and returns
+// the info needed to start tracking after spawn. Clears entry.resumePos (consumed).
+function buildPlaybackArgs(entry, player, id) {
+  const kind = playerKind(player.path);
+  const args = [];
+  if (entry.resumePos > 5) {
+    if (kind === 'mpv') args.push(`--start=${Math.floor(entry.resumePos)}`);
+    else if (kind === 'vlc') args.push(`--start-time=${Math.floor(entry.resumePos)}`);
+  }
+  entry.resumePos = null;
+
+  let vlc = null;
+  if (kind === 'mpv') {
+    args.push(`--input-ipc-server=${mpvPipePath(id)}`);
+  } else if (kind === 'vlc') {
+    const port = 9000 + (entry.port - 8888);
+    const pwd = Math.random().toString(36).slice(2, 12);
+    args.push('--extraintf=http', '--http-host=127.0.0.1', `--http-port=${port}`, `--http-password=${pwd}`);
+    vlc = { port, pwd };
+  }
+  return { kind, args, vlc };
+}
+
+function startPlaybackTracking(id, kind, vlc) {
+  if (kind === 'mpv') connectMpvIPC(id);
+  else if (kind === 'vlc' && vlc) connectVlcHttp(id, vlc.port, vlc.pwd);
+}
+
 function mpvPipePath(id) {
   const short = id.slice(0, 16);
   return process.platform === 'win32'
@@ -233,6 +269,7 @@ function connectMpvIPC(id) {
       entry.playback = null;
       saveSession();
       persistWatchProgress(id);
+      maybeOfferNextEpisode(id).catch(() => {});
     });
 
     socket.on('error', () => {
@@ -242,6 +279,54 @@ function connectMpvIPC(id) {
   };
 
   setTimeout(tryConnect, 500);
+}
+
+// VLC exposes time/length over its HTTP interface (--extraintf=http). We poll
+// /requests/status.json; when VLC is closed the request fails — after a few misses
+// we treat it as "playback ended" and save the resume position (same as mpv).
+function connectVlcHttp(id, port, password) {
+  const entry = active.get(id);
+  if (!entry || entry.playback) return;
+  entry.playback = { pos: 0, duration: 0, vlc: true };
+  const auth = 'Basic ' + Buffer.from(':' + password).toString('base64');
+  let misses = 0;
+
+  const poll = async () => {
+    const cur = active.get(id);
+    if (!cur || !cur.playback) return;            // removed or ended
+    try {
+      const res = await fetch(`http://127.0.0.1:${port}/requests/status.json`, {
+        headers: { Authorization: auth },
+        signal: AbortSignal.timeout(2000),
+      });
+      if (res.ok) {
+        const s = await res.json();
+        misses = 0;
+        if (typeof s.time === 'number') cur.playback.pos = s.time;
+        if (typeof s.length === 'number' && s.length > 0) cur.playback.duration = s.length;
+        if (s.state === 'stopped' && cur.playback.pos > 0) { endVlcPlayback(id); return; }
+      } else {
+        misses++;
+      }
+    } catch { misses++; }
+    if (misses >= 5) { endVlcPlayback(id); return; }
+    cur._vlcTimer = setTimeout(poll, 1000);
+  };
+
+  // Give VLC ~2 s to boot its HTTP interface before the first poll.
+  entry._vlcTimer = setTimeout(poll, 2000);
+}
+
+function endVlcPlayback(id) {
+  const entry = active.get(id);
+  if (!entry || !entry.playback) return;
+  clearTimeout(entry._vlcTimer);
+  entry.resumePos = entry.playback.pos > 5 ? entry.playback.pos : null;
+  entry.resumeDuration = entry.playback.duration || entry.resumeDuration || null;
+  entry.playback = null;
+  saveSession();
+  persistWatchProgress(id);
+  maybeOfferNextEpisode(id).catch(() => {});
 }
 
 // --- Subtitles (OpenSubtitles auto-fetch) ---
@@ -294,9 +379,37 @@ function persistWatchProgress(id) {
   });
 }
 
+// After a series/anime episode finishes (~watched to the end), find the next episode's
+// best stream and notify the renderer so it can offer "Play next episode".
+async function maybeOfferNextEpisode(id) {
+  const entry = active.get(id);
+  if (!entry) return;
+  const ctx = entry.episodeContext;
+  if (!ctx || ctx.episode == null) return;
+
+  const pos = entry.resumePos, dur = entry.resumeDuration;
+  if (!pos || !dur || dur <= 0 || pos / dur < 0.85) return;   // not finished enough
+
+  const settings = getSettings(app.getPath('userData'));
+  const nextEpisode = ctx.episode + 1;
+  const streams = await fetchTorrentioStreams(ctx.id, ctx.type, ctx.season, nextEpisode, settings.torrentioUrl);
+  const best = pickBestTorrentioStream(streams);
+  if (!best || !best.magnet) return;
+
+  const label = ctx.type === 'anime' ? `E${nextEpisode}` : `S${ctx.season ?? 1}E${nextEpisode}`;
+  mainWindow?.webContents.send('episode:next', {
+    magnet: best.magnet,
+    label,
+    title: ctx.title || null,
+    poster: ctx.poster || null,
+    autoPlay: !!settings.autoPlayNext,
+    context: { id: ctx.id, type: ctx.type, season: ctx.season, episode: nextEpisode, title: ctx.title, poster: ctx.poster },
+  });
+}
+
 // --- Add torrent (shared logic) ---
 
-function addTorrentInternal(torrentId, magnet, downloadDir, resumePos = null) {
+function addTorrentInternal(torrentId, magnet, downloadDir, resumePos = null, episodeContext = null) {
   return new Promise((resolve, reject) => {
     const opts = downloadDir ? { path: downloadDir } : {};
 
@@ -349,6 +462,7 @@ function addTorrentInternal(torrentId, magnet, downloadDir, resumePos = null) {
             torrent, fileState, server, port, magnet,
             speedHistory: [], playback: null, resumePos,
             queuePaused: false, meta: null, casting: null,
+            episodeContext: episodeContext || null,
           });
           saveSession();
 
@@ -492,9 +606,19 @@ app.on('window-all-closed', () => {
 
 // --- IPC ---
 
-ipcMain.handle('torrent:add', async (_, source, resumePos = null) => {
+ipcMain.handle('torrent:add', async (_, source, resumePos = null, episodeContext = null) => {
   if (typeof source !== 'string' || !source.trim()) throw new Error('Invalid source');
   const resume = (typeof resumePos === 'number' && resumePos > 5) ? resumePos : null;
+  const epCtx = (episodeContext && typeof episodeContext.id === 'string')
+    ? {
+        id: episodeContext.id,
+        type: episodeContext.type === 'anime' ? 'anime' : 'series',
+        season: Number.isInteger(episodeContext.season) ? episodeContext.season : null,
+        episode: Number.isInteger(episodeContext.episode) ? episodeContext.episode : null,
+        title: typeof episodeContext.title === 'string' ? episodeContext.title : null,
+        poster: typeof episodeContext.poster === 'string' ? episodeContext.poster : null,
+      }
+    : null;
 
   let torrentId = source;
   const magnet = source.startsWith('magnet:') ? source : null;
@@ -513,7 +637,7 @@ ipcMain.handle('torrent:add', async (_, source, resumePos = null) => {
     catch (e) { throw new Error(`Impossible de lire le fichier : ${e.message}`); }
   }
   const settings = getSettings(app.getPath('userData'));
-  const result = await addTorrentInternal(torrentId, magnet, settings.downloadDir, resume);
+  const result = await addTorrentInternal(torrentId, magnet, settings.downloadDir, resume, epCtx);
   if (active.has(result.id) && queueOrder.includes(result.id)) throw new Error('already_downloading');
 
   if (!queueOrder.includes(result.id)) {
@@ -575,16 +699,13 @@ ipcMain.handle('torrent:play', async (_, id) => {
     if (fetched) subArgs.push(`--sub-file=${fetched}`);
   }
 
-  const extraArgs = [];
-  if (entry.resumePos > 5) extraArgs.push(`--start=${Math.floor(entry.resumePos)}`);
-  entry.resumePos = null;
-  if (isMpv(player.path)) extraArgs.push(`--input-ipc-server=${mpvPipePath(id)}`);
+  const { kind, args: extraArgs, vlc } = buildPlaybackArgs(entry, player, id);
 
   const url = `http://localhost:${entry.port}/`;
   const child = spawn(player.path, [...(player.args || []), ...subArgs, ...extraArgs, url], { detached: true, stdio: 'ignore' });
   child.on('error', () => {});
 
-  if (isMpv(player.path)) connectMpvIPC(id);
+  startPlaybackTracking(id, kind, vlc);
 
   child.unref();
   return true;
@@ -619,14 +740,11 @@ ipcMain.handle('torrent:playLocal', async (_, id) => {
     if (fetched) subArgs.push(`--sub-file=${fetched}`);
   }
 
-  const extraArgs = [];
-  if (entry.resumePos > 5) extraArgs.push(`--start=${Math.floor(entry.resumePos)}`);
-  entry.resumePos = null;
-  if (isMpv(player.path)) extraArgs.push(`--input-ipc-server=${mpvPipePath(id)}`);
+  const { kind, args: extraArgs, vlc } = buildPlaybackArgs(entry, player, id);
 
   const child = spawn(player.path, [...(player.args || []), ...subArgs, ...extraArgs, filePath], { detached: true, stdio: 'ignore' });
   child.on('error', () => {});
-  if (isMpv(player.path)) connectMpvIPC(id);
+  startPlaybackTracking(id, kind, vlc);
   child.unref();
   return true;
 });
@@ -649,6 +767,7 @@ ipcMain.handle('torrent:remove', (_, id) => {
   }
 
   entry.playback?.socket?.destroy();
+  clearTimeout(entry._vlcTimer);
   entry.server.close();
   entry.torrent.destroy();
   active.delete(id);

@@ -637,6 +637,26 @@ section h2 {
 .banner-actions button:first-child:hover { background: var(--red-h); box-shadow: 0 4px 14px var(--red-glow); }
 .banner-actions button:last-child:hover { background: var(--card-h); }
 
+/* ── Next-episode banner ──────────────────────────────── */
+#next-episode-banner {
+  position: fixed; bottom: 20px; left: 16px; right: 16px;
+  background: var(--surface);
+  border: 1px solid rgba(229,9,20,0.45);
+  border-radius: 12px;
+  padding: 10px 14px;
+  display: flex; align-items: center; gap: 12px;
+  z-index: 95;
+  font-size: 13px; font-weight: 500; color: var(--text);
+  box-shadow: 0 10px 36px rgba(0,0,0,0.55), 0 0 0 1px rgba(229,9,20,0.12) inset;
+  backdrop-filter: blur(8px);
+  animation: fadeInUp 0.25s ease;
+}
+#next-ep-poster {
+  width: 34px; height: 50px; object-fit: cover; border-radius: 5px;
+  flex-shrink: 0; box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+}
+#next-ep-text { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
 /* ── Toast ────────────────────────────────────────────── */
 #toast {
   position: fixed;

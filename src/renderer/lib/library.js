@@ -259,6 +259,7 @@ function populateSettings() {
   if (!players.length) { const o = new Option(t('player.none'), ''); o.disabled = true; select.add(o); }
 
   document.getElementById('language-select').value = settings.language || 'en';
+  document.getElementById('auto-play-next').checked = settings.autoPlayNext !== false;
   document.getElementById('download-dir').value = settings.downloadDir || '';
   document.getElementById('delete-after-play').checked = !!settings.deleteAfterPlay;
   document.getElementById('max-download').value = settings.maxDownload || '';
@@ -311,6 +312,7 @@ async function saveSettings() {
   const maxDl = parseInt(document.getElementById('max-download').value) || 0;
   const maxUl = parseInt(document.getElementById('max-upload').value) || 0;
   const language = document.getElementById('language-select').value;
+  const autoPlayNext = document.getElementById('auto-play-next').checked;
   const torrentioUrl = document.getElementById('torrentio-url').value.trim();
   const subtitleLanguage = document.getElementById('subtitle-language').value;
   const openSubtitlesApiKey = document.getElementById('opensubtitles-key').value.trim();
@@ -323,6 +325,7 @@ async function saveSettings() {
     maxDownload: maxDl || null,
     maxUpload: maxUl || null,
     language,
+    autoPlayNext,
     torrentioUrl: torrentioUrl || null,
     subtitleLanguage,
     openSubtitlesApiKey: openSubtitlesApiKey || null,

@@ -197,35 +197,50 @@ export function registerMetadataIpc() {
     } catch { return []; }
   });
 
-  ipcMain.handle('torrentio:streams', async (_, id, type, season, episode) => {
+  ipcMain.handle('torrentio:streams', (_, id, type, season, episode) => {
     const settings = getSettings(app.getPath('userData'));
-    const baseUrl = (settings.torrentioUrl || 'https://torrentio.strem.fun').replace(/\/$/, '');
-    let streamId = id;
-    if (type === 'series' && season != null) streamId = `${id}:${season}:${episode}`;
-    else if (type === 'anime' && episode != null) streamId = `${id}:${episode}`;
-    try {
-      const res = await fetch(`${baseUrl}/stream/${type}/${streamId}.json`, {
-        signal: AbortSignal.timeout(12000),
-        headers: { 'User-Agent': 'Mozilla/5.0' },
-      });
-      const data = await res.json();
-      return (data.streams || []).map(s => {
-        const nameParts = (s.name || '').split('\n');
-        const quality = nameParts[1]?.trim() || '';
-        const titleLines = (s.title || '').split('\n');
-        const fileName = titleLines[0] || '';
-        const metaLine = titleLines.slice(1).join(' ');
-        const seedersMatch = metaLine.match(/👤\s*(\d+)/);
-        const sizeMatch = metaLine.match(/💾\s*([\d.,]+ ?(?:GB|MB|TB))/);
-        return {
-          quality,
-          fileName,
-          seeders: seedersMatch ? parseInt(seedersMatch[1]) : null,
-          size: sizeMatch ? sizeMatch[1] : null,
-          magnet: s.infoHash ? buildMagnet(s) : null,
-          debrid: !s.infoHash,
-        };
-      });
-    } catch { return []; }
+    return fetchTorrentioStreams(id, type, season, episode, settings.torrentioUrl);
   });
+}
+
+// Reusable Torrentio stream fetch — used by the IPC handler AND by the auto-next-episode
+// logic in main.js. Returns parsed stream objects (never throws).
+export async function fetchTorrentioStreams(id, type, season, episode, torrentioUrl) {
+  const baseUrl = (torrentioUrl || 'https://torrentio.strem.fun').replace(/\/$/, '');
+  let streamId = id;
+  if (type === 'series' && season != null) streamId = `${id}:${season}:${episode}`;
+  else if (type === 'anime' && episode != null) streamId = `${id}:${episode}`;
+  try {
+    const res = await fetch(`${baseUrl}/stream/${type}/${streamId}.json`, {
+      signal: AbortSignal.timeout(12000),
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+    });
+    const data = await res.json();
+    return (data.streams || []).map(s => {
+      const nameParts = (s.name || '').split('\n');
+      const quality = nameParts[1]?.trim() || '';
+      const titleLines = (s.title || '').split('\n');
+      const fileName = titleLines[0] || '';
+      const metaLine = titleLines.slice(1).join(' ');
+      const seedersMatch = metaLine.match(/👤\s*(\d+)/);
+      const sizeMatch = metaLine.match(/💾\s*([\d.,]+ ?(?:GB|MB|TB))/);
+      return {
+        quality,
+        fileName,
+        seeders: seedersMatch ? parseInt(seedersMatch[1]) : null,
+        size: sizeMatch ? sizeMatch[1] : null,
+        magnet: s.infoHash ? buildMagnet(s) : null,
+        debrid: !s.infoHash,
+      };
+    });
+  } catch { return []; }
+}
+
+// Pick the best playable stream: most seeders, non-debrid. Optionally bias to 1080p.
+export function pickBestTorrentioStream(streams) {
+  const playable = (streams || []).filter(s => s.magnet && !s.debrid);
+  if (!playable.length) return null;
+  const hd = playable.filter(s => /1080/.test(s.quality));
+  const pool = hd.length ? hd : playable;
+  return pool.reduce((best, s) => (s.seeders ?? 0) > (best.seeders ?? 0) ? s : best);
 }

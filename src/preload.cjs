@@ -2,7 +2,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
-  addTorrent:        (src, resumePos) => ipcRenderer.invoke('torrent:add', src, resumePos),
+  addTorrent:        (src, resumePos, episodeContext) => ipcRenderer.invoke('torrent:add', src, resumePos, episodeContext),
   changeFile:        (id, idx)    => ipcRenderer.invoke('torrent:changeFile', id, idx),
   playTorrent:       (id)         => ipcRenderer.invoke('torrent:play', id),
   playLocal:         (id)         => ipcRenderer.invoke('torrent:playLocal', id),
@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld('api', {
   torrentioStreams:  (id, type, season, episode)     => ipcRenderer.invoke('torrentio:streams', id, type, season, episode),
   onState:           (cb)         => ipcRenderer.on('torrent:state', (_, data) => cb(data)),
   onClipboardMagnet: (cb)         => ipcRenderer.on('clipboard:magnet', (_, magnet) => cb(magnet)),
+  onNextEpisode:     (cb)         => ipcRenderer.on('episode:next', (_, data) => cb(data)),
   // Window controls
   minimize:          ()           => ipcRenderer.send('window:minimize'),
   maximize:          ()           => ipcRenderer.send('window:maximize'),

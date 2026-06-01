@@ -7,6 +7,9 @@ let pendingClipboardMagnet = null;
 let filePickerTorrentId = null;
 let castTargetId = null;
 let searchFilters = { category: 'tout', quality: 'tout' };
+let nextEpisodeData = null;
+let nextEpisodeTimer = null;
+let nextEpisodeReadyIv = null;
 const pendingTorrents = new Map();
 
 async function init() {
@@ -14,6 +17,7 @@ async function init() {
   applyTranslations(settings.language || 'en');
   window.api.onState(data => { torrents = data; renderList(); updateGlobalStats(); });
   window.api.onClipboardMagnet(magnet => showClipboardBanner(magnet));
+  window.api.onNextEpisode(data => showNextEpisodeBanner(data));
   window.api.onUpdateAvailable(({ version, url }) => {
     let releaseUrl = url;
     document.getElementById('update-text').textContent = t('update.available', { version });
@@ -212,6 +216,9 @@ function bindUI() {
   });
   document.getElementById('clipboard-dismiss').addEventListener('click', hideClipboardBanner);
 
+  document.getElementById('next-ep-play').addEventListener('click', triggerNextEpisode);
+  document.getElementById('next-ep-dismiss').addEventListener('click', hideNextEpisodeBanner);
+
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
       if (!document.getElementById('player-setup-modal').classList.contains('hidden')) { closePlayerSetup(); return; }
@@ -250,7 +257,7 @@ async function handleAdd() {
   doAdd(val);
 }
 
-async function doAdd(source, resumePos = null) {
+async function doAdd(source, resumePos = null, episodeContext = null) {
   const pid = 'pending-' + Date.now();
   pendingTorrents.set(pid, {
     id: pid, name: t('card.buffering'), connecting: true,
@@ -263,10 +270,11 @@ async function doAdd(source, resumePos = null) {
   });
   renderList();
   try {
-    const r = await window.api.addTorrent(source, resumePos);
+    const r = await window.api.addTorrent(source, resumePos, episodeContext);
     pendingTorrents.delete(pid);
     toast(t('toast.added', { name: r.name }));
     if (r.videoFiles?.length > 1) openFilePicker(r.id, r.videoFiles);
+    return r;
   } catch (err) {
     pendingTorrents.delete(pid);
     renderList();
@@ -621,6 +629,61 @@ function showClipboardBanner(magnet) {
 function hideClipboardBanner() {
   document.getElementById('clipboard-banner').classList.add('hidden');
   pendingClipboardMagnet = null;
+}
+
+// --- Next episode ---
+
+function showNextEpisodeBanner(data) {
+  if (!data || !data.magnet) return;
+  nextEpisodeData = data;
+  const banner = document.getElementById('next-episode-banner');
+  const poster = document.getElementById('next-ep-poster');
+  const text = document.getElementById('next-ep-text');
+  if (data.poster) { poster.src = data.poster; poster.classList.remove('hidden'); }
+  else poster.classList.add('hidden');
+
+  clearTimeout(nextEpisodeTimer);
+  if (data.autoPlay) {
+    let s = 8;
+    const tick = () => {
+      if (s < 0) { triggerNextEpisode(); return; }
+      text.textContent = t('nextEp.countdown', { label: data.label, s });
+      s--;
+      nextEpisodeTimer = setTimeout(tick, 1000);
+    };
+    tick();
+  } else {
+    text.textContent = t('nextEp.label', { label: data.label });
+  }
+  banner.classList.remove('hidden');
+}
+
+function hideNextEpisodeBanner() {
+  clearTimeout(nextEpisodeTimer);
+  nextEpisodeTimer = null;
+  document.getElementById('next-episode-banner').classList.add('hidden');
+}
+
+async function triggerNextEpisode() {
+  const data = nextEpisodeData;
+  hideNextEpisodeBanner();
+  if (!data) return;
+  document.querySelector('.add-tab[data-tab="magnet"]')?.click();
+  try {
+    const r = await doAdd(data.magnet, null, data.context);
+    if (r && r.id) autoPlayWhenReady(r.id);
+  } catch {}
+}
+
+function autoPlayWhenReady(id) {
+  clearInterval(nextEpisodeReadyIv);
+  let tries = 0;
+  nextEpisodeReadyIv = setInterval(() => {
+    tries++;
+    const tr = torrents.find(x => x.id === id);
+    if (tr && tr.ready) { clearInterval(nextEpisodeReadyIv); play(id); }
+    else if (tries > 150) clearInterval(nextEpisodeReadyIv);   // give up after ~2.5 min
+  }, 1000);
 }
 
 // --- About ---

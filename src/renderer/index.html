@@ -160,6 +160,12 @@
               <option value="fr">Français</option>
             </select>
           </div>
+          <div class="field-row">
+            <label class="checkbox-label">
+              <input type="checkbox" id="auto-play-next">
+              <span data-i18n="label.autoPlayNext">Auto-play next episode</span>
+            </label>
+          </div>
         </section>
 
         <section>
@@ -362,6 +368,16 @@
     <div class="banner-actions">
       <button id="clipboard-add" data-i18n="btn.add">Add</button>
       <button id="clipboard-dismiss">✕</button>
+    </div>
+  </div>
+
+  <!-- Bannière épisode suivant -->
+  <div id="next-episode-banner" class="hidden">
+    <img id="next-ep-poster" class="hidden" alt="">
+    <span id="next-ep-text"></span>
+    <div class="banner-actions">
+      <button id="next-ep-play" data-i18n="nextEp.play">▶ Play next</button>
+      <button id="next-ep-dismiss">✕</button>
     </div>
   </div>
 
