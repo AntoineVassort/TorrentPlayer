@@ -14,6 +14,7 @@ export function getDefaults(userDataPath) {
     openSubtitlesApiKey: null,
     autoPlayNext: true,
     autoGrabFollowed: false,
+    preferredQuality: null,
   };
 }
 

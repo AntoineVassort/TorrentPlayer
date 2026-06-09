@@ -136,6 +136,13 @@ const TRANSLATIONS = {
     'torrentio.go': 'Watch',
     'torrentio.noStreams': 'No streams found for this episode',
     'torrentio.loadingStreams': 'Loading streams...',
+    'label.preferredQuality': 'Preferred quality',
+    'quality.off': 'Ask every time',
+    'quality.best': 'Best available',
+    'series.watch': 'Watch',
+    'series.season': 'Season {n}',
+    'series.noEpisodes': 'No episodes found',
+    'toast.autoAdding': 'Adding best {quality}...',
   },
   fr: {
     'tab.magnet': 'Magnet',
@@ -272,6 +279,13 @@ const TRANSLATIONS = {
     'torrentio.go': 'Voir',
     'torrentio.noStreams': 'Aucun stream trouvé pour cet épisode',
     'torrentio.loadingStreams': 'Chargement des streams...',
+    'label.preferredQuality': 'Qualité préférée',
+    'quality.off': 'Toujours demander',
+    'quality.best': 'Meilleure dispo',
+    'series.watch': 'Regarder',
+    'series.season': 'Saison {n}',
+    'series.noEpisodes': 'Aucun épisode trouvé',
+    'toast.autoAdding': 'Ajout du meilleur {quality}...',
   },
 };
 

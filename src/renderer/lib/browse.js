@@ -8,6 +8,14 @@ let torrentioCurrentItem = null;
 let torrentioBackFn = null;
 let searchDebounceTimer = null;
 const streamCache = new Map();
+function autoPick(streams, pref) {
+  const playable = (streams || []).filter(s => !s.debrid && s.magnet);
+  if (!playable.length) return null;
+  if (pref === 'best') return playable.reduce((a, b) => (b.seeders ?? 0) > (a.seeders ?? 0) ? b : a);
+  const tiered = pickBestStream(playable, pref);
+  return tiered || pickBestStream(playable, '1080p') || pickBestStream(playable, '720p') || playable[0] || null;
+}
+
 function renderDiscoverSkeleton() {
   const grid = document.getElementById('discover-results');
   grid.innerHTML = Array(12).fill(0).map(() => `
@@ -238,6 +246,16 @@ async function fetchAndRenderDetailStreams(id, type, season, episode, item = nul
   container.innerHTML = `<div class="torrentio-loading">${t('torrentio.loadingStreams')}</div>`;
   try {
     const streams = await window.api.torrentioStreams(id, type, season, episode);
+    const pref = settings.preferredQuality;
+    if (pref) {
+      const best = autoPick(streams, pref);
+      if (best) {
+        container.innerHTML = '';
+        toast(t('toast.autoAdding', { quality: pref === 'best' ? t('quality.best') : pref }));
+        doAdd(best.magnet, null, episodeCtx(id, type, season, episode, item));
+        return;
+      }
+    }
     container.innerHTML = '';
     renderQualityShortcuts(container, streams);
     renderStreamRows(container, streams, episodeCtx(id, type, season, episode, item));
@@ -489,6 +507,16 @@ async function fetchAndRenderTorrentioStreams(id, type, season, episode, item) {
 
   try {
     const streams = await window.api.torrentioStreams(id, type, season, episode);
+    const pref = settings.preferredQuality;
+    if (pref) {
+      const best = autoPick(streams, pref);
+      if (best) {
+        container.innerHTML = '';
+        toast(t('toast.autoAdding', { quality: pref === 'best' ? t('quality.best') : pref }));
+        doAdd(best.magnet, null, episodeCtx(id, type, season, episode, item));
+        return;
+      }
+    }
     if (type === 'movie') {
       container.querySelector('.torrentio-loading')?.remove();
     } else {

@@ -1,6 +1,6 @@
 {
   "name": "torrent-player",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "description": "Stream torrents via an external player",
   "type": "module",
   "main": "src/main.js",
@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "chromecasts": "^1.10.2",
+    "dlnacasts": "^0.1.0",
     "webtorrent": "^2.5.0"
   },
   "devDependencies": {

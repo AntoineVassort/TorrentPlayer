@@ -165,6 +165,7 @@ function bindUI() {
 
   document.getElementById('history-btn').addEventListener('click', openHistory);
   document.getElementById('history-back-btn').addEventListener('click', closeHistory);
+  document.getElementById('series-back-btn').addEventListener('click', closeSeriesView);
 
   document.getElementById('detail-back-btn').addEventListener('click', closeDetailView);
 
@@ -237,6 +238,7 @@ function bindUI() {
       if (!document.getElementById('clipboard-banner').classList.contains('hidden')) { hideClipboardBanner(); return; }
       if (!document.getElementById('about-modal').classList.contains('hidden')) { closeAbout(); return; }
       if (!document.getElementById('detail-view').classList.contains('hidden')) { closeDetailView(); return; }
+      if (!document.getElementById('series-view').classList.contains('hidden')) { closeSeriesView(); return; }
       if (!document.getElementById('history-view').classList.contains('hidden')) { closeHistory(); return; }
       if (!document.getElementById('settings-view').classList.contains('hidden')) { closeSettings(); return; }
       const sr = document.getElementById('search-results');
@@ -592,7 +594,7 @@ async function openCastPicker(id) {
         item.addEventListener('click', async () => {
           closeCastModal();
           try {
-            await window.api.castToDevice(castTargetId, d.host);
+            await window.api.castToDevice(castTargetId, d.host, d.type);
             toast(t('cast.started', { name: d.name }));
           } catch (err) {
             toast(err.message, true);

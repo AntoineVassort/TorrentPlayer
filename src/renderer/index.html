@@ -176,6 +176,17 @@
               <span data-i18n="label.autoGrabFollowed">Auto-download new episodes of followed series</span>
             </label>
           </div>
+          <div class="field-row">
+            <label data-i18n="label.preferredQuality">Preferred quality</label>
+            <select id="preferred-quality">
+              <option value="" data-i18n="quality.off">Ask every time</option>
+              <option value="best" data-i18n="quality.best">Best available</option>
+              <option value="4K">4K</option>
+              <option value="1080p">1080p</option>
+              <option value="720p">720p</option>
+              <option value="480p">480p</option>
+            </select>
+          </div>
         </section>
 
         <section>
@@ -284,6 +295,26 @@
         <button id="detail-go-btn" class="btn-primary" data-i18n="torrentio.go">Watch</button>
       </div>
       <div id="detail-streams-area"></div>
+    </div>
+
+    <!-- Vue épisodes (depuis la bibliothèque Follows) -->
+    <div id="series-view" class="hidden">
+      <header>
+        <img class="title-icon" src="../assets/tray.png" alt="">
+        <button id="series-back-btn" data-i18n="btn.back">← Back</button>
+        <span class="logo" id="series-view-title"></span>
+      </header>
+      <div id="series-view-content">
+        <div id="series-hero">
+          <img id="series-hero-poster" alt="">
+          <div id="series-hero-info">
+            <div id="series-hero-title"></div>
+            <div id="series-hero-meta"></div>
+          </div>
+        </div>
+        <div id="series-season-tabs"></div>
+        <div id="series-episodes-list"></div>
+      </div>
     </div>
 
   </div>

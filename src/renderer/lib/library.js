@@ -82,7 +82,9 @@ function createLibCard(item, onRemove) {
   const yearLine    = item.year ? `<div class="lib-info-year">${esc(String(item.year))}</div>` : '';
 
   const frac = watchFraction(item);
-  const progressBar = frac > 0.01
+  const watchedItem = item.watched || frac >= 0.85;
+  const watchedBadge = watchedItem ? `<div class="lib-watched-badge">✓</div>` : '';
+  const progressBar = frac > 0.01 && !watchedItem
     ? `<div class="lib-progress"><div class="lib-progress-fill" style="width:${(frac * 100).toFixed(1)}%"></div></div>`
     : '';
 
@@ -102,6 +104,7 @@ function createLibCard(item, onRemove) {
     ${posterHTML}
     ${ratingBadge}
     ${activeBadge}
+    ${watchedBadge}
     ${progressBar}
     <div class="lib-info">
       <div class="lib-info-title">${esc(item.title || item.name)}</div>
@@ -277,6 +280,8 @@ function createFollowCard(f) {
     </div>
   `;
 
+  card.querySelector('.follow-poster-wrap').addEventListener('click', () => openSeriesView(f));
+
   card.querySelector('.follow-grab')?.addEventListener('click', async e => {
     e.stopPropagation();
     try {
@@ -292,6 +297,121 @@ function createFollowCard(f) {
   });
 
   return card;
+}
+
+// --- Series episode view ---
+
+function closeSeriesView() {
+  document.getElementById('series-view').classList.add('hidden');
+  document.getElementById('history-view').classList.remove('hidden');
+}
+
+async function openSeriesView(follow) {
+  document.getElementById('history-view').classList.add('hidden');
+  document.getElementById('series-view').classList.remove('hidden');
+  document.getElementById('series-view-title').textContent = follow.title;
+
+  const heroTitle = document.getElementById('series-hero-title');
+  const heroMeta  = document.getElementById('series-hero-meta');
+  const heroPoster = document.getElementById('series-hero-poster');
+  heroTitle.textContent = follow.title;
+  heroMeta.textContent = follow.nextAir
+    ? t('follow.next', { label: `S${follow.nextAir.season}E${follow.nextAir.number}`, date: follow.nextAir.airstamp ? fmtDate(follow.nextAir.airstamp) : '' })
+    : '';
+  if (follow.poster) { heroPoster.src = follow.poster; heroPoster.style.display = ''; }
+  else heroPoster.style.display = 'none';
+
+  const list = document.getElementById('series-episodes-list');
+  const tabsEl = document.getElementById('series-season-tabs');
+  list.innerHTML = `<div class="torrentio-loading">${t('status.searching')}</div>`;
+  tabsEl.innerHTML = '';
+
+  let episodes = [], progress = {};
+  try {
+    [{ episodes }, progress] = await Promise.all([
+      window.api.seriesEpisodes(follow.imdbId, follow.tvmazeId || null),
+      window.api.seriesProgress(follow.imdbId),
+    ]);
+  } catch {
+    list.innerHTML = `<div class="torrentio-empty">${t('status.networkError')}</div>`;
+    return;
+  }
+
+  const seasons = {};
+  for (const ep of episodes) {
+    if (!seasons[ep.season]) seasons[ep.season] = [];
+    seasons[ep.season].push(ep);
+  }
+
+  const seasonKeys = Object.keys(seasons);
+  if (!seasonKeys.length) {
+    list.innerHTML = `<div class="torrentio-empty">${t('series.noEpisodes')}</div>`;
+    return;
+  }
+
+  const renderEps = (season) => {
+    tabsEl.querySelectorAll('.season-tab').forEach(b => b.classList.toggle('active', b.dataset.season == season));
+    list.innerHTML = '';
+    for (const ep of (seasons[season] || [])) {
+      const key = `${ep.season}:${ep.number}`;
+      const watched = !!progress[key];
+      const row = document.createElement('div');
+      row.className = `series-ep-row${watched ? ' ep-watched' : ''}`;
+      const airDate = ep.airstamp ? fmtDate(ep.airstamp) : '';
+      row.innerHTML = `
+        <div class="series-ep-left">
+          <span class="series-ep-num">E${ep.number}</span>
+          <div class="series-ep-text">
+            <span class="series-ep-name">${esc(ep.name || '')}</span>
+            ${airDate ? `<span class="series-ep-date">${esc(airDate)}</span>` : ''}
+          </div>
+        </div>
+        <div class="series-ep-actions">
+          <button class="btn-series-mark" title="${watched ? 'Mark unwatched' : 'Mark watched'}">${watched ? '✓' : '○'}</button>
+          <button class="btn-series-watch">${t('series.watch')}</button>
+        </div>
+      `;
+
+      row.querySelector('.btn-series-mark').addEventListener('click', async () => {
+        const newWatched = !progress[key];
+        await window.api.seriesMarkWatched(follow.imdbId, ep.season, ep.number, newWatched);
+        if (newWatched) progress[key] = true; else delete progress[key];
+        row.classList.toggle('ep-watched', newWatched);
+        const btn = row.querySelector('.btn-series-mark');
+        btn.textContent = newWatched ? '✓' : '○';
+        btn.title = newWatched ? 'Mark unwatched' : 'Mark watched';
+      });
+
+      row.querySelector('.btn-series-watch').addEventListener('click', async () => {
+        const btn = row.querySelector('.btn-series-watch');
+        btn.disabled = true;
+        btn.textContent = '...';
+        try {
+          const streams = await window.api.torrentioStreams(follow.imdbId, 'series', ep.season, ep.number);
+          const playable = (streams || []).filter(s => !s.debrid && s.magnet);
+          if (!playable.length) { toast(t('torrentio.noStreams'), true); return; }
+          const hd = playable.filter(s => /1080/i.test(s.quality));
+          const best = (hd.length ? hd : playable).reduce((a, b) => (b.seeders ?? 0) > (a.seeders ?? 0) ? b : a);
+          const ctx = { id: follow.imdbId, type: 'series', season: ep.season, episode: ep.number, title: follow.title, poster: follow.poster };
+          doAdd(best.magnet, null, ctx);
+          closeSeriesView();
+        } catch { toast(t('status.networkError'), true); }
+        finally { btn.disabled = false; btn.textContent = t('series.watch'); }
+      });
+
+      list.appendChild(row);
+    }
+  };
+
+  for (const s of seasonKeys) {
+    const btn = document.createElement('button');
+    btn.className = 'season-tab';
+    btn.dataset.season = s;
+    btn.textContent = t('series.season', { n: s });
+    btn.addEventListener('click', () => renderEps(s));
+    tabsEl.appendChild(btn);
+  }
+  renderEps(seasonKeys[0]);
 }
 
 // --- Clipboard banner ---
@@ -328,6 +448,7 @@ function populateSettings() {
   document.getElementById('language-select').value = settings.language || 'en';
   document.getElementById('auto-play-next').checked = settings.autoPlayNext !== false;
   document.getElementById('auto-grab-followed').checked = !!settings.autoGrabFollowed;
+  document.getElementById('preferred-quality').value = settings.preferredQuality || '';
   document.getElementById('download-dir').value = settings.downloadDir || '';
   document.getElementById('delete-after-play').checked = !!settings.deleteAfterPlay;
   document.getElementById('max-download').value = settings.maxDownload || '';
@@ -382,6 +503,7 @@ async function saveSettings() {
   const language = document.getElementById('language-select').value;
   const autoPlayNext = document.getElementById('auto-play-next').checked;
   const autoGrabFollowed = document.getElementById('auto-grab-followed').checked;
+  const preferredQuality = document.getElementById('preferred-quality').value || null;
   const torrentioUrl = document.getElementById('torrentio-url').value.trim();
   const subtitleLanguage = document.getElementById('subtitle-language').value;
   const openSubtitlesApiKey = document.getElementById('opensubtitles-key').value.trim();
@@ -396,6 +518,7 @@ async function saveSettings() {
     language,
     autoPlayNext,
     autoGrabFollowed,
+    preferredQuality,
     torrentioUrl: torrentioUrl || null,
     subtitleLanguage,
     openSubtitlesApiKey: openSubtitlesApiKey || null,

@@ -12,6 +12,8 @@ import { getSettings, saveSettings } from './settings.js';
 import { addEntry, loadHistory, removeEntry, updateEntry } from './history.js';
 import { loadFollows, addFollow, removeFollow, updateFollow } from './follows.js';
 import { discoverDevices, castMedia, getLocalIP } from './chromecast.js';
+import { discoverDlnaDevices, castDlna } from './dlna.js';
+import { markEpisode, getSeriesProgress } from './series-progress.js';
 import { fetchSubtitle, cleanReleaseName, parseSeasonEpisode } from './subtitles.js';
 import { fetchMetaFromCinemeta, registerMetadataIpc, fetchTorrentioStreams, pickBestTorrentioStream, fetchSeriesEpisodes } from './metadata.js';
 
@@ -370,6 +372,7 @@ function persistWatchProgress(id) {
   if (!entry || !entry.resumePos) return;
   const magnet = entry.magnet || entry.torrent.magnetURI;
   if (!magnet) return;
+  const watched = entry.resumeDuration > 0 && entry.resumePos / entry.resumeDuration >= 0.85;
   addEntry(app.getPath('userData'), {
     id,
     name: entry.fileState.file?.name || entry.torrent.name,
@@ -377,8 +380,12 @@ function persistWatchProgress(id) {
     watchedAt: new Date().toISOString(),
     resumePos: entry.resumePos,
     resumeDuration: entry.resumeDuration || null,
+    watched,
     ...(entry.meta || {}),
   });
+  if (watched && entry.episodeContext?.id && entry.episodeContext?.season != null && entry.episodeContext?.episode != null) {
+    markEpisode(app.getPath('userData'), entry.episodeContext.id, entry.episodeContext.season, entry.episodeContext.episode, true);
+  }
 }
 
 // After a series/anime episode finishes (~watched to the end), find the next episode's
@@ -978,7 +985,12 @@ ipcMain.handle('follow:grab', async (_, imdbId) => {
   return result;
 });
 
-ipcMain.handle('cast:discover', () => discoverDevices(4000));
+ipcMain.handle('cast:discover', async () => {
+  const [cc, dlna] = await Promise.all([discoverDevices(4000), discoverDlnaDevices(4000)]);
+  const ccTagged = cc.map(d => ({ ...d, type: 'chromecast' }));
+  const seen = new Set(ccTagged.map(d => d.host));
+  return [...ccTagged, ...dlna.filter(d => !seen.has(d.host))];
+});
 
 // Rebind a torrent's stream server from loopback to 0.0.0.0 so a Chromecast on
 // the LAN can reach it. Existing connections (e.g. a local player) are dropped —
@@ -999,12 +1011,13 @@ function ensureLanReachable(entry) {
   });
 }
 
-ipcMain.handle('cast:play', async (_, id, host) => {
+ipcMain.handle('cast:play', async (_, id, host, deviceType) => {
   const entry = active.get(id);
   if (!entry) throw new Error('Torrent introuvable');
   await ensureLanReachable(entry);
   const url = `http://${getLocalIP()}:${entry.port}/`;
-  await castMedia(host, url);
+  if (deviceType === 'dlna') await castDlna(host, url);
+  else await castMedia(host, url);
   entry.casting = host;
   return true;
 });
@@ -1052,6 +1065,19 @@ ipcMain.handle('dialog:player', async () => {
 ipcMain.handle('dialog:directory', async () => {
   const r = await dialog.showOpenDialog(mainWindow, { properties: ['openDirectory'] });
   return r.canceled ? null : r.filePaths[0];
+});
+
+ipcMain.handle('series:episodes', async (_, imdbId, tvmazeId) => {
+  return fetchSeriesEpisodes(imdbId, tvmazeId || null);
+});
+
+ipcMain.handle('series:progress', (_, imdbId) => {
+  return getSeriesProgress(app.getPath('userData'), imdbId);
+});
+
+ipcMain.handle('series:markWatched', (_, imdbId, season, episode, watched) => {
+  markEpisode(app.getPath('userData'), imdbId, season, episode, watched !== false);
+  return true;
 });
 
 // --- Window controls ---

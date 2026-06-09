@@ -640,6 +640,150 @@
   padding: 32px 16px;
 }
 
+/* ── Watched badge ───────────────────────────────────── */
+.lib-watched-badge {
+  position: absolute;
+  bottom: 7px; right: 7px;
+  background: rgba(0,0,0,0.75);
+  backdrop-filter: blur(4px);
+  border-radius: 50%;
+  width: 22px; height: 22px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700;
+  color: #4ade80;
+  pointer-events: none;
+  border: 1px solid rgba(74,222,128,0.4);
+}
+
+/* ── Series episode view ─────────────────────────────── */
+#series-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+#series-view-content {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+#series-hero {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 16px 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+#series-hero-poster {
+  width: 60px;
+  height: 90px;
+  object-fit: cover;
+  border-radius: 6px;
+  flex-shrink: 0;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+}
+#series-hero-info { flex: 1; min-width: 0; padding-top: 2px; }
+#series-hero-title {
+  font-size: 15px; font-weight: 700; color: var(--text);
+  line-height: 1.3; margin-bottom: 5px;
+}
+#series-hero-meta { font-size: 11px; color: var(--muted-h); }
+#series-season-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 10px 16px 8px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+}
+.season-tab {
+  padding: 5px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--muted-h);
+  font-size: 12px; font-weight: 600;
+  cursor: pointer;
+  transition: background 0.14s, border-color 0.14s, color 0.14s;
+  font-family: inherit;
+}
+.season-tab:hover { border-color: rgba(229,9,20,0.3); color: var(--text); }
+.season-tab.active { background: var(--red); border-color: var(--red); color: #fff; }
+#series-episodes-list { padding: 6px 0; }
+.series-ep-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  transition: background 0.12s;
+}
+.series-ep-row:hover { background: var(--card); }
+.series-ep-row.ep-watched { opacity: 0.55; }
+.series-ep-row.ep-watched:hover { opacity: 1; }
+.series-ep-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+.series-ep-num {
+  font-size: 11px; font-weight: 700;
+  color: var(--muted);
+  flex-shrink: 0;
+  min-width: 28px;
+}
+.series-ep-text { flex: 1; min-width: 0; }
+.series-ep-name {
+  display: block;
+  font-size: 12px; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-weight: 500;
+}
+.series-ep-date {
+  display: block;
+  font-size: 10px; color: var(--muted);
+  margin-top: 1px;
+}
+.series-ep-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.btn-series-mark {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted-h);
+  width: 26px; height: 26px;
+  font-size: 13px; font-weight: 700;
+  cursor: pointer;
+  transition: all var(--ease);
+  font-family: inherit;
+  display: flex; align-items: center; justify-content: center;
+}
+.btn-series-mark:hover { border-color: #4ade80; color: #4ade80; }
+.ep-watched .btn-series-mark { border-color: rgba(74,222,128,0.4); color: #4ade80; }
+.btn-series-watch {
+  padding: 5px 14px;
+  background: var(--red);
+  border: none;
+  border-radius: 7px;
+  color: #fff;
+  font-size: 11px; font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background var(--ease), box-shadow var(--ease);
+}
+.btn-series-watch:hover { background: var(--red-h); box-shadow: 0 3px 10px var(--red-glow); }
+.btn-series-watch:disabled { opacity: 0.5; cursor: default; }
+
 /* ── View transitions ────────────────────────────────── */
 @keyframes viewSlideIn {
   from { opacity: 0; transform: translateX(14px); }
@@ -648,6 +792,7 @@
 #main-view:not(.hidden),
 #settings-view:not(.hidden),
 #history-view:not(.hidden),
+#series-view:not(.hidden),
 #detail-view:not(.hidden) {
   animation: viewSlideIn 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
