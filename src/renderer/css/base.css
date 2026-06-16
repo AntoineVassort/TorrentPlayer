@@ -384,6 +384,10 @@ header button:hover { color: var(--text); background: var(--border); }
 #update-banner button:hover { background: var(--indigo); border-color: var(--indigo); }
 #update-dismiss-btn { background: transparent !important; border-color: transparent !important; color: var(--muted) !important; }
 #update-dismiss-btn:hover { color: var(--text) !important; background: var(--border) !important; }
+#update-banner button:disabled { opacity: 0.5; cursor: default; }
+#update-progress { width: 120px; height: 6px; border-radius: 3px; background: rgba(99,102,241,0.2); overflow: hidden; flex-shrink: 0; }
+#update-progress.hidden { display: none; }
+#update-progress-bar { height: 100%; width: 0%; background: var(--indigo); transition: width var(--ease); }
 
 #no-player-banner {
   display: flex;

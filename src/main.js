@@ -16,10 +16,12 @@ import { discoverDlnaDevices, castDlna } from './dlna.js';
 import { markEpisode, getSeriesProgress } from './series-progress.js';
 import { fetchSubtitle, cleanReleaseName, parseSeasonEpisode } from './subtitles.js';
 import { fetchMetaFromCinemeta, registerMetadataIpc, fetchTorrentioStreams, pickBestTorrentioStream, fetchSeriesEpisodes } from './metadata.js';
+import { registerUpdaterIpc } from './updater.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 registerMetadataIpc();
+registerUpdaterIpc(() => mainWindow);
 
 function semverNewer(latest, current) {
   const p = v => v.replace(/^v/, '').split('.').map(Number);
@@ -676,24 +678,28 @@ app.whenReady().then(async () => {
 
 app.on('before-quit', (event) => {
   app.isQuitting = true;
+  // Idempotent: the deleteAfterPlay branch calls app.quit() again from its .finally,
+  // which re-fires before-quit. Tear down only once to avoid double client.destroy().
+  if (app.tornDown) return;
+  app.tornDown = true;
   const settings = getSettings(app.getPath('userData'));
 
   if (settings.deleteAfterPlay && active.size > 0) {
     event.preventDefault();
     const toDelete = [...active.values()].map(e => {
       const ref = e.torrent;
-      e.server.close();
-      e.torrent.destroy();
+      try { e.server.close(); } catch {}
+      try { if (!e.torrent.destroyed) e.torrent.destroy(); } catch {}
       return ref;
     });
     active.clear();
     queueOrder = [];
     saveSession();
-    client.destroy();
+    try { if (!client.destroyed) client.destroy(); } catch {}
     Promise.all(toDelete.map(deleteTorrentFiles)).finally(() => app.quit());
   } else {
     saveSession();
-    client.destroy();
+    try { if (!client.destroyed) client.destroy(); } catch {}
   }
 });
 

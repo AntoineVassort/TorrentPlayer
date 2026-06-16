@@ -44,6 +44,8 @@ contextBridge.exposeInMainWorld('api', {
   onMaximize:        (cb)         => ipcRenderer.on('window:maximize',   () => cb(true)),
   onUnmaximize:      (cb)         => ipcRenderer.on('window:unmaximize', () => cb(false)),
   onUpdateAvailable: (cb)         => ipcRenderer.on('update:available',  (_, data) => cb(data)),
+  onUpdateProgress:  (cb)         => ipcRenderer.on('update:progress',   (_, data) => cb(data)),
+  downloadUpdate:    ()           => ipcRenderer.invoke('update:download'),
   openRelease:       (url)        => ipcRenderer.send('update:openRelease', url),
   getVersion:        ()           => ipcRenderer.invoke('app:version'),
   openExternal:      (url)        => ipcRenderer.send('app:openExternal', url),

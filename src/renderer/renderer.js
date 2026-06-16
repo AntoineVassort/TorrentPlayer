@@ -23,9 +23,28 @@ async function init() {
     if (!document.getElementById('history-view').classList.contains('hidden')) renderFollows();
   });
   window.api.onUpdateAvailable(({ version, url }) => {
-    let releaseUrl = url;
-    document.getElementById('update-text').textContent = t('update.available', { version });
-    document.getElementById('update-download-btn').onclick = () => window.api.openRelease(releaseUrl);
+    const releaseUrl = url;
+    const text = document.getElementById('update-text');
+    const btn = document.getElementById('update-download-btn');
+    const progress = document.getElementById('update-progress');
+    const bar = document.getElementById('update-progress-bar');
+    text.textContent = t('update.available', { version });
+    btn.onclick = async () => {
+      btn.disabled = true;
+      progress.classList.remove('hidden');
+      bar.style.width = '0%';
+      text.textContent = t('update.downloading');
+      const res = await window.api.downloadUpdate();
+      if (res && res.ok) { text.textContent = t('update.restarting'); return; }
+      if (res && res.dev) { window.api.openRelease(releaseUrl); }     // unpackaged: open GitHub
+      else { text.textContent = t('update.failed'); }
+      progress.classList.add('hidden');
+      btn.disabled = false;
+    };
+    window.api.onUpdateProgress(({ pct }) => {
+      bar.style.width = `${pct}%`;
+      text.textContent = t('update.downloading') + ` ${pct}%`;
+    });
     document.getElementById('update-dismiss-btn').onclick = () => document.getElementById('update-banner').classList.add('hidden');
     document.getElementById('update-banner').classList.remove('hidden');
   });
