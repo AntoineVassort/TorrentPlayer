@@ -47,6 +47,50 @@ async function checkForUpdates(win) {
 const VIDEO_EXTENSIONS    = ['.mp4', '.mkv', '.avi', '.mov', '.webm', '.m4v', '.ts', '.flv'];
 const SUBTITLE_EXTENSIONS = ['.srt', '.ass', '.ssa', '.vtt', '.sub'];
 
+// Extra public trackers merged into every torrent's announce list (on top of
+// whatever the magnet already carries) to widen peer discovery — matters most
+// for Torrentio streams that arrive as a bare infohash with few/no trackers.
+//
+// The live list is refreshed at startup from ngosang/trackerslist (the "best"
+// list, kept current by the community). DEFAULT_TRACKERS is the offline
+// fallback: a curated subset of reliable UDP/HTTPS trackers used if the fetch
+// fails. activeTrackers holds whichever is in effect.
+const DEFAULT_TRACKERS = [
+  'udp://tracker.opentrackr.org:1337/announce',
+  'udp://open.demonii.com:1337/announce',
+  'udp://open.stealth.si:80/announce',
+  'udp://exodus.desync.com:6969/announce',
+  'udp://tracker.torrent.eu.org:451/announce',
+  'udp://open.tracker.cl:1337/announce',
+  'udp://opentracker.io:6969/announce',
+  'udp://tracker.dler.org:6969/announce',
+  'udp://p4p.arenabg.com:1337/announce',
+  'udp://open.dstud.io:6969/announce',
+  'udp://tracker.ktrackers.com:6666/announce',
+  'udp://open.free-tracker.ga:6969/announce',
+  'https://tracker.tamersunion.org:443/announce',
+  'https://tracker.gcrenwp.top:443/announce',
+];
+
+let activeTrackers = DEFAULT_TRACKERS;
+
+// Pull the community-maintained "best" tracker list at startup. Falls back to
+// DEFAULT_TRACKERS (already in activeTrackers) on any failure — offline, 404, etc.
+async function refreshTrackers() {
+  try {
+    const res = await fetch(
+      'https://raw.githubusercontent.com/ngosang/trackerslist/master/trackers_best.txt',
+      { headers: { 'User-Agent': 'TorrentPlayer' }, signal: AbortSignal.timeout(8000) }
+    );
+    if (!res.ok) return;
+    const list = (await res.text())
+      .split('\n')
+      .map(l => l.trim())
+      .filter(l => /^(udp|https?|wss?):\/\//.test(l));
+    if (list.length) activeTrackers = list;
+  } catch {}
+}
+
 function isVideo(name)    { return VIDEO_EXTENSIONS.includes(path.extname(name).toLowerCase()); }
 function isSubtitle(name) { return SUBTITLE_EXTENSIONS.includes(path.extname(name).toLowerCase()); }
 
@@ -495,7 +539,8 @@ async function checkFollows() {
 
 function addTorrentInternal(torrentId, magnet, downloadDir, resumePos = null, episodeContext = null) {
   return new Promise((resolve, reject) => {
-    const opts = downloadDir ? { path: downloadDir } : {};
+    const opts = { announce: activeTrackers };
+    if (downloadDir) opts.path = downloadDir;
 
     const pending = client.add(torrentId, opts, (torrent) => {
       clearTimeout(timer);
@@ -594,6 +639,10 @@ function addTorrentInternal(torrentId, magnet, downloadDir, resumePos = null, ep
 app.whenReady().then(async () => {
   createWindow();
   createTray();
+
+  // Refresh the public tracker list in the background (non-blocking — torrents
+  // added before it resolves just use the curated fallback).
+  refreshTrackers();
 
   // Progress updates
   setInterval(() => {
@@ -835,8 +884,20 @@ ipcMain.handle('torrent:play', async (_, id) => {
 ipcMain.handle('torrent:stopSeed', (_, id) => {
   const entry = active.get(id);
   if (!entry) return;
-  if (entry.torrent.paused) entry.torrent.resume();
-  else entry.torrent.pause();
+  const t = entry.torrent;
+  if (t.paused) {
+    // Resume seeding: restore upload slots, then reconnect/unchoke as usual.
+    t._rechokeNumSlots = 10;
+    t.resume();
+  } else {
+    // Stop seeding for real. torrent.pause() only flips a flag — WebTorrent's
+    // rechoke loop keeps unchoking already-connected peers and serving them
+    // pieces, so upload never actually stops. Zero the rechoke slots so the
+    // loop never unchokes anyone, and choke the wires that are already open.
+    t.pause();
+    t._rechokeNumSlots = 0;
+    t.wires.forEach(w => w.choke());
+  }
   return true;
 });
 
