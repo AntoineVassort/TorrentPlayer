@@ -16,15 +16,17 @@ TorrentPlayer downloads and streams simultaneously. It serves the file over a lo
 - **Continue Watching** — resume where you left off; the library shows a progress bar and a one-click resume
 - **Auto-play next episode** — when an episode ends, the next one is fetched and played automatically (toggle in Settings)
 - **Follow series** — ★ follow a series to get notified when a new episode airs; download it in one click, or auto-download (opt-in). Followed shows and their next air date appear in the Library
+- **Episode view & watched markers** — browse a followed series season-by-season, with a ✓ on episodes (and library items) you've already watched
+- **Quality auto-pick** — set a preferred quality (4K / 1080p / 720p / 480p) and the best matching stream is added automatically, skipping the stream list
 - **Resume position** — saved and restored for both mpv (IPC) and VLC (HTTP interface)
 - **Subtitles** — uses `.srt`/`.ass`/`.vtt` embedded in the torrent, and can auto-fetch from OpenSubtitles when none are present
 - **Smart queue** — download one at a time, drag to reorder
 - **Stuck-download recovery** — when a torrent finds no peers, switch to another release (series/anime) or retry the search in one click; warns when disk space is low
 - **Library** — media grid with posters, ratings and titles for everything you've watched (metadata via Cinemeta, no API key)
-- **Chromecast** — cast to any device on your local network
+- **Cast** — stream to Chromecast or DLNA/UPnP devices on your local network
 - **Bandwidth limits** — optional max download / upload speed
 - **Languages** — English & French
-- **Auto-update** — notifies you when a new version is available
+- **Auto-update** — download and install new versions from inside the app, in one click
 - **System tray** — closing the window minimizes to tray; tray shows live download speed
 - **Clipboard detection** — paste a magnet link and the app picks it up automatically
 
