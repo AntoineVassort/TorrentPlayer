@@ -30,8 +30,10 @@ jobs:
         include:
           - os: windows-latest
             script: dist
-          - os: macos-latest
-            script: dist:mac
+          - os: macos-13
+            script: dist:mac-x64
+          - os: macos-14
+            script: dist:mac-arm64
           - os: ubuntu-latest
             script: dist:linux
     runs-on: ${{ matrix.os }}
@@ -57,8 +59,12 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           cd dist
-          zip -r ../TorrentPlayer-macOS-x64.zip TorrentPlayer-darwin-x64
-          zip -r ../TorrentPlayer-macOS-arm64.zip TorrentPlayer-darwin-arm64
+          if [ -d TorrentPlayer-darwin-x64 ]; then
+            zip -r ../TorrentPlayer-macOS-x64.zip TorrentPlayer-darwin-x64
+          fi
+          if [ -d TorrentPlayer-darwin-arm64 ]; then
+            zip -r ../TorrentPlayer-macOS-arm64.zip TorrentPlayer-darwin-arm64
+          fi
 
       - name: Package (Linux)
         if: runner.os == 'Linux'
@@ -67,7 +73,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: build-${{ runner.os }}
+          name: build-${{ matrix.os }}
           path: TorrentPlayer-*.zip
 
   release:
