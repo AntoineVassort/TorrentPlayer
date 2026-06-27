@@ -1,12 +1,19 @@
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
 
 :root {
-  --bg:          #080810;
-  --surface:     #0c0c1a;
-  --card:        #101020;
-  --card-h:      #16162c;
-  --border:      #1a1a30;
-  --border-h:    #262645;
+  /* Popcorn Time gunmetal */
+  --bg:          #23282d;
+  --surface:     #1c2025;
+  --card:        #2b3036;
+  --card-h:      #343a41;
+  --border:      #383f47;
+  --border-h:    #49515b;
+
+  /* Popcorn Time steel-blue accent */
+  --pt:          #4f9fd6;
+  --pt-h:        #6fb4e3;
+  --pt-dim:      rgba(79,159,214,0.16);
+  --pt-glow:     rgba(79,159,214,0.30);
 
   --red:         #e50914;
   --red-h:       #ff2228;
@@ -17,9 +24,9 @@
   --indigo-h:    #818cf8;
   --indigo-dim:  rgba(99,102,241,0.15);
 
-  --text:        #eeeef8;
-  --muted:       #505068;
-  --muted-h:     #7878a0;
+  --text:        #eef1f4;
+  --muted:       #707a85;
+  --muted-h:     #9aa5b1;
 
   --danger:      #ef4444;
   --success:     #10b981;
@@ -51,7 +58,7 @@ body::before {
   content: '';
   position: fixed;
   top: 0; left: 0; right: 0; height: 320px;
-  background: radial-gradient(ellipse 80% 100% at 50% -10%, rgba(229,9,20,0.07) 0%, transparent 70%);
+  background: radial-gradient(ellipse 80% 100% at 50% -10%, rgba(79,159,214,0.06) 0%, transparent 70%);
   pointer-events: none;
   z-index: 0;
 }
@@ -109,6 +116,158 @@ header button {
   justify-content: center;
 }
 header button:hover { color: var(--text); background: var(--border); }
+
+/* ── Popcorn Time nav bar (main view) ────────────────── */
+#pt-nav {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  height: 52px;
+  padding: 0 150px 0 18px;            /* right pad clears window controls */
+  background: linear-gradient(180deg, #1d2228 0%, #191d22 100%);
+  border-bottom: 1px solid rgba(0,0,0,0.4);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.03) inset, 0 2px 12px rgba(0,0,0,0.35);
+  flex-shrink: 0;
+  -webkit-app-region: drag;
+  position: relative;
+  z-index: 5;
+}
+#pt-nav button,
+#pt-nav select { -webkit-app-region: no-drag; }
+
+.pt-tabs { display: flex; align-items: stretch; height: 100%; gap: 4px; }
+.pt-tab {
+  position: relative;
+  background: none;
+  border: none;
+  color: var(--muted-h);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  padding: 0 6px;
+  cursor: pointer;
+  transition: color var(--ease);
+}
+.pt-tab:hover { color: var(--text); }
+.pt-tab.active { color: #fff; }
+.pt-tab.active::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: -1px;
+  height: 3px;
+  background: var(--pt);
+  border-radius: 3px 3px 0 0;
+  box-shadow: 0 0 12px var(--pt-glow), 0 1px 4px var(--pt-glow);
+}
+
+.pt-filters { display: flex; align-items: center; gap: 7px; }
+.pt-filter-label {
+  font-size: 13px;
+  color: var(--muted-h);
+  font-weight: 500;
+}
+.pt-select-wrap { position: relative; display: inline-flex; align-items: center; }
+.pt-select-wrap::after {
+  content: '';
+  position: absolute;
+  right: 4px;
+  width: 7px; height: 7px;
+  border-right: 1.6px solid var(--pt);
+  border-bottom: 1.6px solid var(--pt);
+  transform: rotate(45deg);
+  margin-top: -3px;
+  pointer-events: none;
+}
+.pt-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: none;
+  color: var(--pt);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 4px 18px 4px 2px;
+  outline: none;
+}
+.pt-select:hover { color: var(--pt-h); }
+.pt-select option { background: var(--surface); color: var(--text); font-weight: 500; }
+
+.pt-icons { display: flex; align-items: center; gap: 2px; margin-left: auto; }
+.pt-icons button {
+  position: relative;
+  background: none;
+  border: none;
+  color: var(--muted-h);
+  cursor: pointer;
+  padding: 7px 8px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color var(--ease), background var(--ease);
+  font-family: inherit;
+}
+.pt-icons button:hover { color: #fff; background: rgba(255,255,255,0.07); }
+.pt-icons button.active { color: var(--pt); }
+.pt-icons button svg { display: block; pointer-events: none; }
+
+.pt-badge {
+  position: absolute;
+  top: 1px; right: 1px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--pt);
+  color: #08121a;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 15px;
+  text-align: center;
+  box-shadow: 0 0 0 2px #191d22;
+}
+.pt-badge.hidden { display: none; }
+
+/* ── "Inspired by Popcorn Time" credit ───────────────── */
+#pt-credit {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 7px 0 9px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  color: var(--muted);
+  background: linear-gradient(180deg, transparent, rgba(0,0,0,0.18));
+  border-top: 1px solid rgba(255,255,255,0.04);
+}
+.pt-credit-name {
+  font-weight: 700;
+  color: var(--pt-h);
+  letter-spacing: 0.4px;
+  text-shadow: 0 0 12px var(--pt-glow);
+}
+.pt-heart {
+  color: #ff4d5e;
+  font-size: 12px;
+  display: inline-block;
+  transform-origin: center 70%;
+  animation: heartBeat 1.8s ease-in-out infinite;
+  text-shadow: 0 0 10px rgba(255,77,94,0.5);
+}
+@keyframes heartBeat {
+  0%, 100%   { transform: scale(1); }
+  12%, 30%   { transform: scale(1.28); }
+  20%        { transform: scale(1.12); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pt-heart { animation: none; }
+}
 
 /* ── Window controls ─────────────────────────────────── */
 #win-ctrl {
@@ -171,7 +330,7 @@ header button:hover { color: var(--text); background: var(--border); }
   font-family: inherit;
 }
 .add-tab:hover { color: var(--muted-h); border-color: var(--border); }
-.add-tab.active { background: var(--red-dim); border-color: rgba(229,9,20,0.4); color: #ff6b6b; }
+.add-tab.active { background: var(--pt-dim); border-color: rgba(79,159,214,0.45); color: var(--pt-h); }
 
 .add-panel { display: flex; gap: 8px; flex-wrap: wrap; }
 
@@ -236,13 +395,13 @@ header button:hover { color: var(--text); background: var(--border); }
 
 #add-btn,
 #search-btn {
-  background: var(--red);
+  background: var(--pt);
   border: none;
   border-radius: var(--r);
-  color: white;
+  color: #08121a;
   padding: 9px 20px;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   transition: background var(--ease), box-shadow var(--ease), transform 0.1s;
   white-space: nowrap;
@@ -251,8 +410,8 @@ header button:hover { color: var(--text); background: var(--border); }
 }
 #add-btn:hover,
 #search-btn:hover {
-  background: var(--red-h);
-  box-shadow: 0 4px 18px var(--red-glow);
+  background: var(--pt-h);
+  box-shadow: 0 4px 18px var(--pt-glow);
 }
 #add-btn:active,
 #search-btn:active { transform: scale(0.98); }
@@ -273,6 +432,7 @@ header button:hover { color: var(--text); background: var(--border); }
   padding: 0 16px 16px;
 }
 #search-results.expanded ~ #torrent-list,
+#search-results.expanded ~ #discover-results,
 #search-results.expanded ~ #empty-state {
   display: none;
 }

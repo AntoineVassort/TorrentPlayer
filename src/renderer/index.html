@@ -13,43 +13,66 @@
 
     <!-- Vue principale -->
     <div id="main-view">
-      <header>
-        <img class="title-icon" src="../assets/tray.png" alt="">
-        <span class="logo">TorrentPlayer</span>
-        <button id="history-btn" data-i18n-title="title.library" title="Library">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
-        </button>
-        <button id="settings-btn" data-i18n-title="title.settings" title="Settings">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06-.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-        </button>
-        <button id="about-btn" data-i18n-title="title.about" title="About">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-        </button>
-      </header>
-
-      <div id="add-area">
-        <div class="add-tabs">
-          <button class="add-tab active" data-tab="magnet">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-            <span data-i18n="tab.magnet">Magnet</span>
+      <nav id="pt-nav">
+        <div class="pt-tabs">
+          <button class="pt-tab active" data-pt-cat="movies" data-i18n="nav.movies">Movies</button>
+          <button class="pt-tab" data-pt-cat="series" data-i18n="nav.series">TV Series</button>
+          <button class="pt-tab" data-pt-cat="anime" data-i18n="nav.anime">Anime</button>
+        </div>
+        <div class="pt-filters">
+          <span class="pt-filter-label" data-i18n="nav.genre">Genre</span>
+          <div class="pt-select-wrap">
+            <select id="pt-genre" class="pt-select"></select>
+          </div>
+          <span class="pt-filter-label" data-i18n="nav.sortby">Sort by</span>
+          <div class="pt-select-wrap">
+            <select id="pt-sort" class="pt-select">
+              <option value="popularity" data-i18n="sort.popularity">Popularity</option>
+              <option value="rating" data-i18n="sort.rating">Rating</option>
+              <option value="year" data-i18n="sort.year">Year</option>
+              <option value="title" data-i18n="sort.title">Title</option>
+            </select>
+          </div>
+        </div>
+        <div class="pt-icons">
+          <button id="pt-search-btn" data-i18n-title="title.search" title="Search">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           </button>
-          <button class="add-tab" data-tab="search">
+          <button id="pt-downloads-btn" data-i18n-title="title.downloads" title="Downloads">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span id="pt-dl-badge" class="pt-badge hidden">0</span>
+          </button>
+          <button id="history-btn" data-i18n-title="title.library" title="Library">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+          </button>
+          <button id="about-btn" data-i18n-title="title.about" title="About">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          </button>
+          <button id="settings-btn" data-i18n-title="title.settings" title="Settings">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06-.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </button>
+        </div>
+      </nav>
+
+      <div id="add-area" class="hidden">
+        <div class="add-tabs">
+          <button class="add-tab active" data-tab="search">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             <span data-i18n="tab.search">Search</span>
           </button>
-          <button class="add-tab" data-tab="discover">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>
-            <span data-i18n="tab.discover">Discover</span>
+          <button class="add-tab" data-tab="magnet">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+            <span data-i18n="tab.magnet">Magnet</span>
           </button>
         </div>
-        <div class="add-panel" data-panel="magnet">
+        <div class="add-panel hidden" data-panel="magnet">
           <input id="magnet-input" type="text" data-i18n-placeholder="magnet.placeholder" placeholder="Paste a magnet link or drag a .torrent...">
           <button id="browse-btn" title="Open a .torrent file" class="btn-icon-svg">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
           </button>
           <button id="add-btn" data-i18n="btn.add">Add</button>
         </div>
-        <div class="add-panel hidden" data-panel="search">
+        <div class="add-panel" data-panel="search">
           <input id="search-input" type="text" data-i18n-placeholder="search.placeholder" placeholder="Movie, series name...">
           <button id="search-btn" data-i18n="btn.search">Search</button>
           <div class="search-filters">
@@ -64,13 +87,6 @@
               <button class="filter-btn" data-filter="quality" data-value="1080p">1080p</button>
               <button class="filter-btn" data-filter="quality" data-value="4k">4K</button>
             </div>
-          </div>
-        </div>
-        <div class="add-panel hidden" data-panel="discover">
-          <div class="filter-group">
-            <button class="filter-btn active" data-discover-cat="movies" data-i18n="discover.movies">Movies</button>
-            <button class="filter-btn" data-discover-cat="series" data-i18n="discover.series">Series</button>
-            <button class="filter-btn" data-discover-cat="anime" data-i18n="discover.anime">Anime</button>
           </div>
         </div>
       </div>
@@ -89,11 +105,11 @@
       </div>
 
       <div id="search-results" class="hidden"></div>
-      <div id="discover-results" class="hidden"></div>
+      <div id="discover-results"></div>
 
-      <div id="torrent-list"></div>
+      <div id="torrent-list" class="hidden"></div>
 
-      <div id="empty-state">
+      <div id="empty-state" class="hidden">
         <div class="empty-icon">
           <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.2"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
         </div>
@@ -107,6 +123,13 @@
         <span class="gs-ul" id="gs-ul"></span>
         <span class="gs-peers" id="gs-peers"></span>
       </div>
+
+      <footer id="pt-credit">
+        <span data-i18n="credit.inspired">Inspired by</span>
+        <span class="pt-credit-name">Popcorn&nbsp;Time</span>
+        <span data-i18n="credit.with">with</span>
+        <span class="pt-heart" aria-label="love">♥</span>
+      </footer>
     </div>
 
     <!-- Vue bibliothèque -->
@@ -269,33 +292,48 @@
       </div>
     </div>
 
-    <!-- Vue détail (depuis Discover) -->
+    <!-- Vue détail (depuis Discover / Bibliothèque) — style Popcorn Time -->
     <div id="detail-view" class="hidden">
       <header>
         <img class="title-icon" src="../assets/tray.png" alt="">
         <button id="detail-back-btn" data-i18n="btn.back">← Back</button>
         <span class="logo">TorrentPlayer</span>
       </header>
-      <div id="detail-hero">
-        <div id="detail-hero-bg"></div>
-        <div id="detail-hero-content">
-          <img id="detail-poster-img" src="" alt="">
-          <div id="detail-info">
-            <div id="detail-title-text"></div>
-            <div id="detail-meta-text"></div>
+      <div id="detail-scroll">
+        <div id="detail-hero">
+          <div id="detail-hero-bg"></div>
+          <button id="detail-hero-close" data-i18n-title="win.close" title="Close">✕</button>
+          <div id="detail-hero-content">
+            <img id="detail-poster-img" src="" alt="">
+            <div id="detail-info">
+              <div id="detail-title-text"></div>
+              <div id="detail-meta-text"></div>
+              <p id="detail-synopsis"></p>
+              <div id="detail-bookmark-host"></div>
+            </div>
           </div>
         </div>
+
+        <!-- Série / anime : 3 colonnes -->
+        <div id="detail-series" class="hidden">
+          <div class="detail-col detail-col-seasons">
+            <h3 class="detail-col-title" data-i18n="detail.seasons">Seasons</h3>
+            <div id="detail-season-list"></div>
+          </div>
+          <div class="detail-col detail-col-episodes">
+            <h3 class="detail-col-title" data-i18n="detail.episodes">Episodes</h3>
+            <div id="detail-episode-list"></div>
+          </div>
+          <div class="detail-col detail-col-epinfo">
+            <div id="detail-epinfo"></div>
+          </div>
+        </div>
+
+        <!-- Film : liste de streams -->
+        <div id="detail-movie" class="hidden">
+          <div id="detail-streams-area"></div>
+        </div>
       </div>
-      <div id="detail-ep-picker" class="hidden">
-        <span id="detail-season-group">
-          <label data-i18n="torrentio.season">Season</label>
-          <input id="detail-season" type="number" min="1" value="1">
-        </span>
-        <label data-i18n="torrentio.episode">Episode</label>
-        <input id="detail-episode" type="number" min="1" value="1">
-        <button id="detail-go-btn" class="btn-primary" data-i18n="torrentio.go">Watch</button>
-      </div>
-      <div id="detail-streams-area"></div>
     </div>
 
     <!-- Vue épisodes (depuis la bibliothèque Follows) -->
@@ -431,6 +469,23 @@
     <div class="banner-actions">
       <button id="next-ep-play" data-i18n="nextEp.play">▶ Play next</button>
       <button id="next-ep-dismiss">✕</button>
+    </div>
+  </div>
+
+  <!-- Overlay de téléchargement (style Popcorn Time) -->
+  <div id="download-overlay" class="hidden">
+    <div id="dl-ov-bg"></div>
+    <div id="dl-ov-inner">
+      <div id="dl-ov-title"></div>
+      <div id="dl-ov-status" data-i18n="overlay.downloading">Downloading</div>
+      <div id="dl-ov-track"><div id="dl-ov-bar"></div></div>
+      <div id="dl-ov-pct">0%</div>
+      <div id="dl-ov-stats">
+        <div class="dl-ov-stat"><span data-i18n="overlay.download">Download</span><span id="dl-ov-dl">—</span></div>
+        <div class="dl-ov-stat"><span data-i18n="overlay.upload">Upload</span><span id="dl-ov-ul">—</span></div>
+        <div class="dl-ov-stat"><span data-i18n="overlay.peers">Active Peers</span><span id="dl-ov-peers">0</span></div>
+      </div>
+      <button id="dl-ov-cancel" data-i18n="overlay.cancel">Cancel</button>
     </div>
   </div>
 

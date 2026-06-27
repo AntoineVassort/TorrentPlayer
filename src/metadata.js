@@ -108,52 +108,41 @@ function buildMagnet(s) {
 
 // Register the catalog/stream IPC handlers. Called once from main.js.
 export function registerMetadataIpc() {
-  ipcMain.handle('discover:fetch', async (_, cat) => {
+  // Paginated catalog. `page` is 1-based. Movies & series come from Cinemeta
+  // "top" (skip-paginated, imdb ids → detail/episodes work); anime from Jikan.
+  ipcMain.handle('discover:fetch', async (_, cat, page = 1) => {
     const opts = { signal: AbortSignal.timeout(8000) };
+    const PAGE = 50;
+    const p = Math.max(1, Number(page) || 1);
     try {
-      if (cat === 'movies') {
-        const res = await fetch('https://v3-cinemeta.strem.io/catalog/movie/top.json', opts);
+      if (cat === 'movies' || cat === 'series') {
+        const kind = cat === 'movies' ? 'movie' : 'series';
+        const skip = (p - 1) * PAGE;
+        const url = skip
+          ? `https://v3-cinemeta.strem.io/catalog/${kind}/top/skip=${skip}.json`
+          : `https://v3-cinemeta.strem.io/catalog/${kind}/top.json`;
+        const res = await fetch(url, opts);
         const data = await res.json();
-        const movies = (data.metas || []).slice(0, 24);
-        return await Promise.all(movies.map(async m => ({
+        const metas = (data.metas || []).slice(0, PAGE);
+        return await Promise.all(metas.map(async m => ({
           title: m.name,
-          year: m.year || null,
+          year: m.year || m.releaseInfo || null,
           rating: m.imdbRating || null,
           imdbId: m.id || null,
-          type: 'movie',
+          type: kind,
+          genres: m.genres || m.genre || [],
           posterUrl: await fetchImgBase64(m.poster || null),
         })));
       }
-      if (cat === 'series') {
-        const today = new Date().toISOString().split('T')[0];
-        const res = await fetch(`https://api.tvmaze.com/schedule/web?date=${today}`, opts);
-        const episodes = await res.json();
-        const seen = new Set();
-        const shows = [];
-        for (const ep of episodes) {
-          const show = ep.show || ep._embedded?.show;
-          if (!show || seen.has(show.id) || !show.image?.medium) continue;
-          seen.add(show.id);
-          shows.push({
-            title: show.name,
-            year: show.premiered ? show.premiered.slice(0, 4) : null,
-            rating: show.rating?.average || null,
-            imdbId: show.externals?.imdb || null, type: 'series',
-            posterUrl: show.image.medium,
-          });
-        }
-        const top = shows.sort((a, b) => (b.rating || 0) - (a.rating || 0)).slice(0, 24);
-        return await Promise.all(top.map(async s => ({
-          ...s, posterUrl: await fetchImgBase64(s.posterUrl),
-        })));
-      }
       if (cat === 'anime') {
-        const res = await fetch('https://api.jikan.moe/v4/top/anime?type=tv&limit=24', opts);
+        const res = await fetch(`https://api.jikan.moe/v4/top/anime?type=tv&page=${p}`, opts);
         const data = await res.json();
         return await Promise.all((data?.data || []).map(async a => ({
           title: a.title_english || a.title,
           year: a.year || null,
           rating: a.score || null,
+          type: 'anime',
+          genres: (a.genres || []).map(g => g.name),
           posterUrl: await fetchImgBase64(
                        a.images?.jpg?.large_image_url || a.images?.jpg?.image_url,
                        'https://myanimelist.net'
@@ -162,6 +151,29 @@ export function registerMetadataIpc() {
       }
     } catch { /* network blocked or timeout — return empty */ }
     return [];
+  });
+
+  // Rich metadata for the detail hero (synopsis, runtime, status, genres, rating).
+  // Cinemeta only — imdb ids. Returns null for non-imdb (anime/kitsu) or on failure.
+  ipcMain.handle('meta:detail', async (_, imdbId, type) => {
+    if (!imdbId || !/^tt/.test(imdbId)) return null;
+    const kind = type === 'movie' ? 'movie' : 'series';
+    try {
+      const res = await fetch(`https://v3-cinemeta.strem.io/meta/${kind}/${imdbId}.json`,
+        { signal: AbortSignal.timeout(8000) });
+      const data = await res.json();
+      const m = data?.meta;
+      if (!m) return null;
+      return {
+        description: m.description || '',
+        runtime: m.runtime || '',
+        status: m.status || '',
+        genres: m.genres || m.genre || [],
+        imdbRating: m.imdbRating || null,
+        year: m.releaseInfo || m.year || '',
+        cast: (m.cast || []).slice(0, 4),
+      };
+    } catch { return null; }
   });
 
   ipcMain.handle('torrentio:search', async (_, query, type) => {
@@ -269,6 +281,10 @@ export function pickBestTorrentioStream(streams) {
 // --- TVmaze (series episode list & air dates) — used by "follow a series" and the
 // full episode view. TVmaze is keyed by its own id; resolve from imdb first. ---
 
+function stripHtml(s) {
+  return s ? String(s).replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim() : '';
+}
+
 export async function fetchTvmazeShowByImdb(imdbId) {
   if (!imdbId) return null;
   try {
@@ -298,7 +314,12 @@ export async function fetchSeriesEpisodes(imdbId, tvmazeId = null) {
     const data = await res.json();
     const episodes = (Array.isArray(data) ? data : [])
       .filter(e => e.season != null && e.number != null)
-      .map(e => ({ season: e.season, number: e.number, name: e.name || '', airstamp: e.airstamp || null }));
+      .map(e => ({
+        season: e.season, number: e.number, name: e.name || '',
+        airstamp: e.airstamp || null,
+        summary: stripHtml(e.summary),
+        runtime: e.runtime || null,
+      }));
     return { tvmazeId: id, episodes };
   } catch { return { tvmazeId: tvmazeId || null, episodes: [] }; }
 }

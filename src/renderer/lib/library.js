@@ -306,112 +306,15 @@ function closeSeriesView() {
   document.getElementById('history-view').classList.remove('hidden');
 }
 
-async function openSeriesView(follow) {
-  document.getElementById('history-view').classList.add('hidden');
-  document.getElementById('series-view').classList.remove('hidden');
-  document.getElementById('series-view-title').textContent = follow.title;
-
-  const heroTitle = document.getElementById('series-hero-title');
-  const heroMeta  = document.getElementById('series-hero-meta');
-  const heroPoster = document.getElementById('series-hero-poster');
-  heroTitle.textContent = follow.title;
-  heroMeta.textContent = follow.nextAir
-    ? t('follow.next', { label: `S${follow.nextAir.season}E${follow.nextAir.number}`, date: follow.nextAir.airstamp ? fmtDate(follow.nextAir.airstamp) : '' })
-    : '';
-  if (follow.poster) { heroPoster.src = follow.poster; heroPoster.style.display = ''; }
-  else heroPoster.style.display = 'none';
-
-  const list = document.getElementById('series-episodes-list');
-  const tabsEl = document.getElementById('series-season-tabs');
-  list.innerHTML = `<div class="torrentio-loading">${t('status.searching')}</div>`;
-  tabsEl.innerHTML = '';
-
-  let episodes = [], progress = {};
-  try {
-    [{ episodes }, progress] = await Promise.all([
-      window.api.seriesEpisodes(follow.imdbId, follow.tvmazeId || null),
-      window.api.seriesProgress(follow.imdbId),
-    ]);
-  } catch {
-    list.innerHTML = `<div class="torrentio-empty">${t('status.networkError')}</div>`;
-    return;
-  }
-
-  const seasons = {};
-  for (const ep of episodes) {
-    if (!seasons[ep.season]) seasons[ep.season] = [];
-    seasons[ep.season].push(ep);
-  }
-
-  const seasonKeys = Object.keys(seasons);
-  if (!seasonKeys.length) {
-    list.innerHTML = `<div class="torrentio-empty">${t('series.noEpisodes')}</div>`;
-    return;
-  }
-
-  const renderEps = (season) => {
-    tabsEl.querySelectorAll('.season-tab').forEach(b => b.classList.toggle('active', b.dataset.season == season));
-    list.innerHTML = '';
-    for (const ep of (seasons[season] || [])) {
-      const key = `${ep.season}:${ep.number}`;
-      const watched = !!progress[key];
-      const row = document.createElement('div');
-      row.className = `series-ep-row${watched ? ' ep-watched' : ''}`;
-      const airDate = ep.airstamp ? fmtDate(ep.airstamp) : '';
-      row.innerHTML = `
-        <div class="series-ep-left">
-          <span class="series-ep-num">E${ep.number}</span>
-          <div class="series-ep-text">
-            <span class="series-ep-name">${esc(ep.name || '')}</span>
-            ${airDate ? `<span class="series-ep-date">${esc(airDate)}</span>` : ''}
-          </div>
-        </div>
-        <div class="series-ep-actions">
-          <button class="btn-series-mark" title="${watched ? 'Mark unwatched' : 'Mark watched'}">${watched ? '✓' : '○'}</button>
-          <button class="btn-series-watch">${t('series.watch')}</button>
-        </div>
-      `;
-
-      row.querySelector('.btn-series-mark').addEventListener('click', async () => {
-        const newWatched = !progress[key];
-        await window.api.seriesMarkWatched(follow.imdbId, ep.season, ep.number, newWatched);
-        if (newWatched) progress[key] = true; else delete progress[key];
-        row.classList.toggle('ep-watched', newWatched);
-        const btn = row.querySelector('.btn-series-mark');
-        btn.textContent = newWatched ? '✓' : '○';
-        btn.title = newWatched ? 'Mark unwatched' : 'Mark watched';
-      });
-
-      row.querySelector('.btn-series-watch').addEventListener('click', async () => {
-        const btn = row.querySelector('.btn-series-watch');
-        btn.disabled = true;
-        btn.textContent = '...';
-        try {
-          const streams = await window.api.torrentioStreams(follow.imdbId, 'series', ep.season, ep.number);
-          const playable = (streams || []).filter(s => !s.debrid && s.magnet);
-          if (!playable.length) { toast(t('torrentio.noStreams'), true); return; }
-          const hd = playable.filter(s => /1080/i.test(s.quality));
-          const best = (hd.length ? hd : playable).reduce((a, b) => (b.seeders ?? 0) > (a.seeders ?? 0) ? b : a);
-          const ctx = { id: follow.imdbId, type: 'series', season: ep.season, episode: ep.number, title: follow.title, poster: follow.poster };
-          doAdd(best.magnet, null, ctx);
-          closeSeriesView();
-        } catch { toast(t('status.networkError'), true); }
-        finally { btn.disabled = false; btn.textContent = t('series.watch'); }
-      });
-
-      list.appendChild(row);
-    }
-  };
-
-  for (const s of seasonKeys) {
-    const btn = document.createElement('button');
-    btn.className = 'season-tab';
-    btn.dataset.season = s;
-    btn.textContent = t('series.season', { n: s });
-    btn.addEventListener('click', () => renderEps(s));
-    tabsEl.appendChild(btn);
-  }
-  renderEps(seasonKeys[0]);
+// Followed-series cards now open the unified Popcorn Time detail view (3-pane).
+function openSeriesView(follow) {
+  openDetailView({
+    imdbId: follow.imdbId,
+    tvmazeId: follow.tvmazeId || null,
+    title: follow.title,
+    posterUrl: follow.poster || null,
+    type: 'series',
+  }, 'history');
 }
 
 // --- Clipboard banner ---

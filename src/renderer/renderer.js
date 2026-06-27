@@ -10,12 +10,14 @@ let searchFilters = { category: 'tout', quality: 'tout' };
 let nextEpisodeData = null;
 let nextEpisodeTimer = null;
 let nextEpisodeReadyIv = null;
+let downloadOverlayId = null;     // torrent id tracked by the Popcorn Time download overlay
+let downloadOverlayIv = null;
 const pendingTorrents = new Map();
 
 async function init() {
   [settings, players] = await Promise.all([window.api.getSettings(), window.api.detectPlayers()]);
   applyTranslations(settings.language || 'en');
-  window.api.onState(data => { torrents = data; renderList(); updateGlobalStats(); });
+  window.api.onState(data => { torrents = data; renderList(); updateGlobalStats(); updateDownloadsBadge(); updateDownloadOverlay(); });
   window.api.onClipboardMagnet(magnet => showClipboardBanner(magnet));
   window.api.onNextEpisode(data => showNextEpisodeBanner(data));
   window.api.onNewEpisode(data => {
@@ -49,6 +51,7 @@ async function init() {
     document.getElementById('update-banner').classList.remove('hidden');
   });
   bindUI();
+  loadDiscover(discoverCat);
   await initWinCtrl();
   if (!settings.player && players.length === 0) {
     document.getElementById('no-player-banner').classList.remove('hidden');
@@ -73,24 +76,11 @@ function bindUI() {
       document.querySelectorAll('.add-panel').forEach(p => p.classList.add('hidden'));
       tab.classList.add('active');
       document.querySelector(`[data-panel="${tab.dataset.tab}"]`).classList.remove('hidden');
-      const isDiscover = tab.dataset.tab === 'discover';
-    document.getElementById('torrent-list').classList.toggle('hidden', isDiscover);
-    document.getElementById('empty-state').classList.toggle('hidden', isDiscover);
-    if (tab.dataset.tab === 'magnet') {
-      const sr = document.getElementById('search-results');
-      sr.classList.add('hidden');
-      sr.classList.remove('expanded');
-      document.getElementById('discover-results').classList.add('hidden');
-    } else if (tab.dataset.tab === 'search') {
-      document.getElementById('discover-results').classList.add('hidden');
-    } else if (isDiscover) {
-      torrentioBackFn = null;
-      const sr = document.getElementById('search-results');
-      sr.classList.add('hidden');
-      sr.classList.remove('expanded');
-      document.getElementById('discover-results').classList.remove('hidden');
-      loadDiscover(discoverCat);
-    }
+      if (tab.dataset.tab === 'magnet') {
+        const sr = document.getElementById('search-results');
+        sr.classList.add('hidden');
+        sr.classList.remove('expanded');
+      }
     });
   }
 
@@ -117,13 +107,47 @@ function bindUI() {
     });
   });
 
-  document.querySelectorAll('[data-discover-cat]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('[data-discover-cat]').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      discoverCat = btn.dataset.discoverCat;
+  document.querySelectorAll('[data-pt-cat]').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.pt-tab').forEach(b => b.classList.remove('active'));
+      tab.classList.add('active');
+      discoverCat = tab.dataset.ptCat;
+      torrentioBackFn = null;
+      showMainMode('discover');
       loadDiscover(discoverCat);
     });
+  });
+
+  document.getElementById('pt-genre').addEventListener('change', e => {
+    discoverGenre = e.target.value;
+    applyDiscoverView();
+  });
+  document.getElementById('pt-sort').addEventListener('change', e => {
+    discoverSort = e.target.value;
+    applyDiscoverView();
+  });
+  const discoverGrid = document.getElementById('discover-results');
+  let discoverScrollTick = false;
+  discoverGrid.addEventListener('scroll', () => {
+    if (discoverScrollTick) return;
+    discoverScrollTick = true;
+    requestAnimationFrame(() => {
+      discoverScrollTick = false;
+      if (discoverGrid.scrollTop + discoverGrid.clientHeight >= discoverGrid.scrollHeight - 600) loadMoreDiscover();
+    });
+  }, { passive: true });
+
+  document.getElementById('pt-search-btn').addEventListener('click', toggleSearchPanel);
+  document.getElementById('pt-downloads-btn').addEventListener('click', () => {
+    const inDl = !document.getElementById('torrent-list').classList.contains('hidden');
+    if (inDl) {
+      // toggle back to the active catalog
+      document.querySelector(`.pt-tab[data-pt-cat="${discoverCat}"]`)?.classList.add('active');
+      showMainMode('discover');
+      loadDiscover(discoverCat);
+    } else {
+      showMainMode('downloads');
+    }
   });
 
   document.addEventListener('dragover', e => {
@@ -187,6 +211,8 @@ function bindUI() {
   document.getElementById('series-back-btn').addEventListener('click', closeSeriesView);
 
   document.getElementById('detail-back-btn').addEventListener('click', closeDetailView);
+  document.getElementById('detail-hero-close').addEventListener('click', closeDetailView);
+  document.getElementById('dl-ov-cancel').addEventListener('click', cancelDownloadOverlay);
 
   document.getElementById('about-btn').addEventListener('click', openAbout);
   document.getElementById('about-modal-close').addEventListener('click', closeAbout);
@@ -250,6 +276,7 @@ function bindUI() {
 
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
+      if (!document.getElementById('download-overlay').classList.contains('hidden')) { cancelDownloadOverlay(); return; }
       if (!document.getElementById('player-setup-modal').classList.contains('hidden')) { closePlayerSetup(); return; }
       if (!document.getElementById('cast-modal').classList.contains('hidden')) { closeCastModal(); return; }
       if (!document.getElementById('alt-stream-modal').classList.contains('hidden')) { closeAltStreamModal(); return; }
@@ -260,20 +287,122 @@ function bindUI() {
       if (!document.getElementById('series-view').classList.contains('hidden')) { closeSeriesView(); return; }
       if (!document.getElementById('history-view').classList.contains('hidden')) { closeHistory(); return; }
       if (!document.getElementById('settings-view').classList.contains('hidden')) { closeSettings(); return; }
-      const sr = document.getElementById('search-results');
-      if (sr.classList.contains('expanded')) {
-        sr.classList.add('hidden');
-        sr.classList.remove('expanded');
+      if (!document.getElementById('add-area').classList.contains('hidden') ||
+          document.getElementById('search-results').classList.contains('expanded')) {
+        hideSearchPanel();
         return;
       }
     }
 
     if ((e.ctrlKey && e.key === 'k') || (e.key === '/' && !isInputActive())) {
       e.preventDefault();
-      document.querySelector('.add-tab[data-tab="search"]').click();
-      document.getElementById('search-input').focus();
+      openSearchPanel();
     }
   });
+}
+
+// --- Main-view content modes (Popcorn Time nav) ---
+
+// Switch the main view between the poster catalog and the active downloads list.
+function showMainMode(mode) {
+  const isDl = mode === 'downloads';
+  hideSearchPanel();
+  document.getElementById('discover-results').classList.toggle('hidden', isDl);
+  document.getElementById('torrent-list').classList.toggle('hidden', !isDl);
+  document.getElementById('pt-downloads-btn').classList.toggle('active', isDl);
+  if (isDl) {
+    document.querySelectorAll('.pt-tab').forEach(t => t.classList.remove('active'));
+    renderList();
+    updateGlobalStats();
+  } else {
+    document.getElementById('empty-state').classList.add('hidden');
+  }
+}
+
+function toggleSearchPanel() {
+  if (document.getElementById('add-area').classList.contains('hidden')) openSearchPanel();
+  else hideSearchPanel();
+}
+
+function openSearchPanel() {
+  document.getElementById('add-area').classList.remove('hidden');
+  document.getElementById('pt-search-btn').classList.add('active');
+  document.querySelector('.add-tab[data-tab="search"]').click();
+  document.getElementById('search-input').focus();
+}
+
+function hideSearchPanel() {
+  document.getElementById('add-area').classList.add('hidden');
+  document.getElementById('pt-search-btn').classList.remove('active');
+  const sr = document.getElementById('search-results');
+  sr.classList.add('hidden');
+  sr.classList.remove('expanded');
+}
+
+// --- Download overlay (Popcorn Time "Watch Now" → buffering screen) ---
+
+// Add a torrent and show the fullscreen download overlay; auto-launch the player
+// once enough is buffered. `meta` = { title, poster } for the overlay backdrop/title.
+function watchNow(magnet, episodeContext, meta) {
+  showDownloadOverlay(meta);
+  doAdd(magnet, null, episodeContext).then(r => {
+    if (!r || !r.id) { hideDownloadOverlay(); return; }
+    downloadOverlayId = r.id;
+    updateDownloadOverlay();
+    clearInterval(downloadOverlayIv);
+    let tries = 0;
+    downloadOverlayIv = setInterval(() => {
+      tries++;
+      const tr = torrents.find(x => x.id === downloadOverlayId);
+      if (tr && tr.playback) { clearInterval(downloadOverlayIv); hideDownloadOverlay(); }
+      else if (tr && tr.ready) { clearInterval(downloadOverlayIv); play(downloadOverlayId); hideDownloadOverlay(); }
+      else if (tries > 180) { clearInterval(downloadOverlayIv); hideDownloadOverlay(); toast(t('overlay.background')); }
+    }, 1000);
+  }).catch(() => hideDownloadOverlay());
+}
+
+function showDownloadOverlay(meta) {
+  document.getElementById('dl-ov-title').textContent = meta?.title || '';
+  document.getElementById('dl-ov-bg').style.backgroundImage = meta?.poster ? `url("${meta.poster}")` : '';
+  document.getElementById('dl-ov-bar').style.width = '0%';
+  document.getElementById('dl-ov-pct').textContent = '0%';
+  document.getElementById('dl-ov-dl').textContent = '—';
+  document.getElementById('dl-ov-ul').textContent = '—';
+  document.getElementById('dl-ov-peers').textContent = '0';
+  document.getElementById('download-overlay').classList.remove('hidden');
+}
+
+function hideDownloadOverlay() {
+  clearInterval(downloadOverlayIv);
+  downloadOverlayId = null;
+  document.getElementById('download-overlay').classList.add('hidden');
+}
+
+function updateDownloadOverlay() {
+  if (document.getElementById('download-overlay').classList.contains('hidden')) return;
+  const tr = torrents.find(x => x.id === downloadOverlayId);
+  if (!tr) return;
+  const pct = Math.round((tr.progress || 0) * 100);
+  document.getElementById('dl-ov-bar').style.width = pct + '%';
+  document.getElementById('dl-ov-pct').textContent = pct + '%';
+  document.getElementById('dl-ov-dl').textContent = fmt(tr.downloadSpeed || 0);
+  document.getElementById('dl-ov-ul').textContent = fmt(tr.uploadSpeed || 0);
+  document.getElementById('dl-ov-peers').textContent = String(tr.numPeers || 0);
+}
+
+function cancelDownloadOverlay() {
+  const id = downloadOverlayId;
+  hideDownloadOverlay();
+  if (id) window.api.removeTorrent(id).catch(() => {});
+}
+
+// Badge on the Downloads icon = count of active + pending torrents.
+function updateDownloadsBadge() {
+  const badge = document.getElementById('pt-dl-badge');
+  if (!badge) return;
+  const n = torrents.length + pendingTorrents.size;
+  badge.textContent = n;
+  badge.classList.toggle('hidden', n === 0);
 }
 
 async function handleAdd() {
@@ -300,6 +429,7 @@ async function doAdd(source, resumePos = null, episodeContext = null) {
     port: null, meta: null, queuePos: -1, casting: null, videoFiles: [],
   });
   renderList();
+  updateDownloadsBadge();
   try {
     const r = await window.api.addTorrent(source, resumePos, episodeContext);
     pendingTorrents.delete(pid);

@@ -4,14 +4,18 @@ Stream torrents through your existing video player — no codecs, no transcoding
 
 TorrentPlayer downloads and streams simultaneously. It serves the file over a local HTTP server with range-request support, then launches your external player (VLC, mpv, MPC-HC…) directly with the URL. Seeking, subtitles and buffering are handled natively by the player.
 
+The interface is **inspired by Popcorn Time** — a poster wall you browse by Movies / TV Series / Anime, filter by genre and sort, with infinite scroll, a rich detail view (seasons, episodes, synopsis) and a clean full-screen download screen.
+
 > **Windows-first.** macOS and Linux builds are available (`npm run dist:mac` / `dist:linux`) but less tested.
 
 ---
 
 ## Features
 
-- **Search** — find movies, series and anime via [Torrentio](https://torrentio.strem.fun) (metadata from Cinemeta & Kitsu), with quality shortcuts (4K / 1080p / 720p / 480p)
-- **Discover** — browse popular movies, currently-airing series and top anime without searching
+- **Browse** — a Popcorn Time–style poster wall of popular movies, series and anime, with **Genre** and **Sort** filters and **infinite scroll** that loads more as you go (metadata from Cinemeta & Kitsu)
+- **Detail view** — click any title for a full-screen page: backdrop, synopsis, rating, and for series a **Seasons │ Episodes │ Episode-info** layout with one-click **Watch Now**
+- **Download screen** — a clean full-screen view while a pick buffers (progress, speeds, peers, cancel); the player launches automatically once there's enough to play
+- **Search** — find movies, series and anime via [Torrentio](https://torrentio.strem.fun), with quality shortcuts (4K / 1080p / 720p / 480p)
 - **Stream while downloading** — playback starts before the download completes
 - **Continue Watching** — resume where you left off; the library shows a progress bar and a one-click resume
 - **Auto-play next episode** — when an episode ends, the next one is fetched and played automatically (toggle in Settings)
