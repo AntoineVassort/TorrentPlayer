@@ -35,6 +35,24 @@ async function fetchItunesPoster(title, year, kind = 'movie') {
   } catch { return null; }
 }
 
+// Reject hosts that point at the local machine or a private LAN range, so a
+// malicious/compromised metadata provider can't turn a poster URL into a
+// request-forgery probe of the victim's internal network.
+function isBlockedHost(hostname) {
+  const h = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (h === 'localhost' || h.endsWith('.localhost')) return true;
+  const m = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (m) {
+    const a = Number(m[1]), b = Number(m[2]);
+    if (a === 0 || a === 127 || a === 10) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 169 && b === 254) return true;
+  }
+  if (h === '::1' || h.startsWith('fe80:') || h.startsWith('fc') || h.startsWith('fd')) return true;
+  return false;
+}
+
 export async function fetchImgBase64(url, referer) {
   if (!url) return null;
   const cacheFile = posterCachePath(url);
@@ -51,6 +69,9 @@ export async function fetchImgBase64(url, referer) {
   if (url.includes('img.yts.mx')) candidates.push(url.replace('img.yts.mx', 'img.accel.li'));
   for (const candidate of candidates) {
     try {
+      const u = new URL(candidate);
+      if (u.protocol !== 'https:' && u.protocol !== 'http:') continue;
+      if (isBlockedHost(u.hostname)) continue;
       const res = await fetch(candidate, { signal: AbortSignal.timeout(5000), headers });
       if (!res.ok) continue;
       const buf = await res.arrayBuffer();

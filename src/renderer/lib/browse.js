@@ -369,7 +369,7 @@ function renderDetailEpisodeList(item, eps) {
     const row = document.createElement('div');
     row.className = 'detail-ep-row' + (watched ? ' ep-watched' : '');
     row.innerHTML = `
-      <span class="detail-ep-num">${ep.number}</span>
+      <span class="detail-ep-num">${esc(String(ep.number))}</span>
       <span class="detail-ep-name">${esc(ep.name || `Episode ${ep.number}`)}</span>
       <button class="detail-ep-eye" title="${watched ? t('series.markUnwatched') : t('series.markWatched')}">${ICONS.eye}</button>
     `;

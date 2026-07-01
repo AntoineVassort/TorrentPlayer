@@ -356,7 +356,9 @@ function t(key, vars) {
   let str = dict[key] !== undefined ? dict[key] : (TRANSLATIONS.en[key] !== undefined ? TRANSLATIONS.en[key] : key);
   if (vars) {
     for (const [k, v] of Object.entries(vars)) {
-      str = str.replace(`{${k}}`, v ?? '');
+      // split/join replaces every occurrence and, unlike String.replace with a
+      // string replacement, does not interpret `$`-sequences in the value.
+      str = str.split(`{${k}}`).join(String(v ?? ''));
     }
   }
   return str;

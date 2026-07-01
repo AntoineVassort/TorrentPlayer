@@ -562,7 +562,19 @@ function addTorrentInternal(torrentId, magnet, downloadDir, resumePos = null, ep
       const subtitle = findSubtitle(torrent.files, file);
       const fileState = { file, subtitle };
 
+      // Random token gating LAN access. Loopback requests (the local player) are
+      // always allowed; once the server is rebound to 0.0.0.0 for casting, any
+      // non-loopback request must carry this token in its path, so exposing the
+      // port no longer means unauthenticated LAN disclosure of the media.
+      const streamToken = crypto.randomBytes(16).toString('hex');
+
       const server = http.createServer((req, res) => {
+        const remote = req.socket.remoteAddress || '';
+        const isLoopback = remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1';
+        if (!isLoopback) {
+          const reqPath = (req.url || '/').split('?')[0].replace(/^\/+/, '');
+          if (reqPath !== streamToken) { res.writeHead(403); res.end(); return; }
+        }
         const f = fileState.file;
         const total = f.length;
         const range = req.headers['range'];
@@ -598,7 +610,7 @@ function addTorrentInternal(torrentId, magnet, downloadDir, resumePos = null, ep
       const tryListen = (port) => {
         server.listen(port, '127.0.0.1', () => {
           active.set(torrent.infoHash, {
-            torrent, fileState, server, port, magnet, sockets, host: '127.0.0.1',
+            torrent, fileState, server, port, magnet, sockets, host: '127.0.0.1', streamToken,
             speedHistory: [], playback: null, resumePos,
             queuePaused: false, meta: null, casting: null,
             episodeContext: episodeContext || null,
@@ -837,11 +849,18 @@ ipcMain.handle('torrent:changeFile', (_, id, fileIndex) => {
 });
 
 async function deleteTorrentFiles(torrent) {
-  const folder = path.join(torrent.path, torrent.name);
-  try {
-    await fs.promises.rm(folder, { recursive: true, force: true });
-    return;
-  } catch {}
+  // torrent.name comes straight from the .torrent metadata and is NOT sanitized
+  // by parse-torrent (unlike file.path), so it can contain `..`/separators. Never
+  // feed it raw to rm(): basename it and confirm the target stays inside the
+  // download dir before a recursive force-delete.
+  const root = path.resolve(torrent.path);
+  const folder = path.resolve(root, path.basename(torrent.name));
+  if (folder !== root && folder.startsWith(root + path.sep)) {
+    try {
+      await fs.promises.rm(folder, { recursive: true, force: true });
+      return;
+    } catch {}
+  }
   for (const f of torrent.files) {
     try { await fs.promises.unlink(path.join(torrent.path, f.path)); } catch {}
   }
@@ -858,11 +877,11 @@ ipcMain.handle('torrent:play', async (_, id) => {
 
   const subArgs = [];
   if (entry.fileState.subtitle) {
-    const subPath = path.join(
-      settings.downloadDir || app.getPath('downloads'),
-      entry.torrent.name,
-      entry.fileState.subtitle.path
-    );
+    // subtitle.path already contains the torrent-name segment for multi-file
+    // torrents, and torrent.path already equals the download dir — join them the
+    // same way torrent:playLocal does (joining downloadDir + torrent.name here
+    // doubled the segment, so the file was never found and subs were dropped).
+    const subPath = path.join(entry.torrent.path, entry.fileState.subtitle.path);
     if (fs.existsSync(subPath)) subArgs.push(`--sub-file=${subPath}`);
   } else {
     const fetched = await ensureSubtitle(entry, settings);
@@ -1061,8 +1080,9 @@ ipcMain.handle('cast:discover', async () => {
 
 // Rebind a torrent's stream server from loopback to 0.0.0.0 so a Chromecast on
 // the LAN can reach it. Existing connections (e.g. a local player) are dropped —
-// acceptable since casting deliberately moves playback to the TV. Once exposed
-// it stays exposed (0.0.0.0 already covers loopback).
+// acceptable since casting deliberately moves playback to the TV. It stays bound
+// to 0.0.0.0 afterwards, but non-loopback requests now require entry.streamToken
+// (see the server handler), so the wider bind is not an open LAN endpoint.
 function ensureLanReachable(entry) {
   if (entry.host === '0.0.0.0') return Promise.resolve();
   return new Promise((resolve, reject) => {
@@ -1082,7 +1102,7 @@ ipcMain.handle('cast:play', async (_, id, host, deviceType) => {
   const entry = active.get(id);
   if (!entry) throw new Error('Torrent introuvable');
   await ensureLanReachable(entry);
-  const url = `http://${getLocalIP()}:${entry.port}/`;
+  const url = `http://${getLocalIP()}:${entry.port}/${entry.streamToken}`;
   if (deviceType === 'dlna') await castDlna(host, url);
   else await castMedia(host, url);
   entry.casting = host;

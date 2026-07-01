@@ -254,10 +254,10 @@ function createFollowCard(f) {
 
   let statusHTML;
   if (f.pendingEpisode) {
-    statusHTML = `<div class="follow-new">${t('follow.newEpisode', { label: f.pendingEpisode.label })}</div>`;
+    statusHTML = `<div class="follow-new">${t('follow.newEpisode', { label: esc(f.pendingEpisode.label) })}</div>`;
   } else if (f.nextAir) {
     const when = f.nextAir.airstamp ? fmtDate(f.nextAir.airstamp) : '';
-    statusHTML = `<div class="follow-next">${t('follow.next', { label: `S${f.nextAir.season}E${f.nextAir.number}`, date: when })}</div>`;
+    statusHTML = `<div class="follow-next">${t('follow.next', { label: esc(`S${f.nextAir.season}E${f.nextAir.number}`), date: esc(when) })}</div>`;
   } else {
     statusHTML = `<div class="follow-next">${t('follow.noUpcoming')}</div>`;
   }

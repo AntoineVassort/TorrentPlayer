@@ -3,3 +3,4 @@ dist/
 .claude/
 tasks/
 CLAUDE.md
+.deepsec/

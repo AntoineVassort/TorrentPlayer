@@ -91,7 +91,7 @@ client.add(magnet, (torrent) => {
   });
 
   function startServer(port) {
-    server.listen(port, () => {
+    server.listen(port, '127.0.0.1', () => {
       launchPlayer(player, `http://localhost:${port}/`);
     });
     server.once('error', (err) => {

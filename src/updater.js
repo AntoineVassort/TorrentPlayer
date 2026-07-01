@@ -91,8 +91,11 @@ function run(cmd, args, opts = {}) {
 async function extract(zipPath, destDir) {
   fs.mkdirSync(destDir, { recursive: true });
   if (process.platform === 'win32') {
+    // Double any single quotes so a temp path containing a `'` (possible via some
+    // usernames) doesn't break the single-quoted PowerShell string literal.
+    const ps = (s) => s.replace(/'/g, "''");
     await run('powershell', ['-NoProfile', '-NonInteractive', '-Command',
-      `Expand-Archive -LiteralPath '${zipPath}' -DestinationPath '${destDir}' -Force`]);
+      `Expand-Archive -LiteralPath '${ps(zipPath)}' -DestinationPath '${ps(destDir)}' -Force`]);
   } else if (process.platform === 'darwin') {
     await run('ditto', ['-x', '-k', zipPath, destDir]);
   } else {
