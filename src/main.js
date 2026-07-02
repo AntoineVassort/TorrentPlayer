@@ -909,13 +909,15 @@ ipcMain.handle('torrent:stopSeed', (_, id) => {
     t._rechokeNumSlots = 10;
     t.resume();
   } else {
-    // Stop seeding for real. torrent.pause() only flips a flag — WebTorrent's
-    // rechoke loop keeps unchoking already-connected peers and serving them
-    // pieces, so upload never actually stops. Zero the rechoke slots so the
-    // loop never unchokes anyone, and choke the wires that are already open.
+    // Stop seeding for real. torrent.pause() only flips a flag: it blocks NEW
+    // connections but leaves already-connected wires open (and the rechoke loop
+    // keeps unchoking them), so upload never stops and the UI still shows active
+    // peers. Pause (rejects any reconnect, in or out), zero the rechoke slots,
+    // then destroy the open wires so peers actually disconnect (numPeers → 0).
+    // slice() because wire.destroy() removes it from t.wires mid-iteration.
     t.pause();
     t._rechokeNumSlots = 0;
-    t.wires.forEach(w => w.choke());
+    t.wires.slice().forEach(w => w.destroy());
   }
   return true;
 });
