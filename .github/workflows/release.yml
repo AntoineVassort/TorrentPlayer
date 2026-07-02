@@ -30,10 +30,23 @@ jobs:
         include:
           - os: windows-latest
             script: dist
+          # The upstream node-datachannel macOS prebuilts are compiled on recent
+          # runners (macos-15-intel / macos-14) with no deployment-target floor, so
+          # they link against newer libc++ symbols (e.g. basic_ifstream VTT) absent
+          # on older macOS → "Symbol not found" crash at dlopen. Build from source
+          # with a low deployment target instead so it runs down to Electron 32's
+          # floor (macOS 10.15 Intel / 11.0 Apple Silicon). Homebrew's prefix — hence
+          # the OpenSSL path — differs by arch: /usr/local (Intel) vs /opt/homebrew.
           - os: macos-15-intel
             script: dist:mac-x64
+            buildFromSource: 'node-datachannel'
+            deploymentTarget: '10.15'
+            opensslRoot: /usr/local/opt/openssl@3
           - os: macos-14
             script: dist:mac-arm64
+            buildFromSource: 'node-datachannel'
+            deploymentTarget: '11.0'
+            opensslRoot: /opt/homebrew/opt/openssl@3
           - os: ubuntu-latest
             script: dist:linux
     runs-on: ${{ matrix.os }}
@@ -45,8 +58,19 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
+      - name: Install OpenSSL (node-datachannel source build)
+        if: matrix.buildFromSource != ''
+        run: HOMEBREW_NO_INSTALL_CLEANUP=1 brew install openssl@3
+
       - name: Install dependencies
         run: npm ci
+        env:
+          # Empty for the Windows/Linux jobs → normal prebuilt download. Set for the
+          # macOS jobs to force a from-source build of node-datachannel pinned to a
+          # low libc++ deployment target.
+          npm_config_build_from_source: ${{ matrix.buildFromSource }}
+          MACOSX_DEPLOYMENT_TARGET: ${{ matrix.deploymentTarget }}
+          OPENSSL_ROOT_DIR: ${{ matrix.opensslRoot }}
 
       - name: Build
         run: npm run ${{ matrix.script }}
