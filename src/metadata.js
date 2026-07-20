@@ -84,29 +84,87 @@ export async function fetchImgBase64(url, referer) {
   return null;
 }
 
-export async function fetchMetaFromCinemeta(name) {
-  const clean = name
-    .replace(/\.(mkv|mp4|avi|mov|webm|m4v)$/i, '')
-    .replace(/[\._]/g, ' ')
-    .replace(/\b(2160p|1080p|720p|480p|4k|uhd|bluray|webrip|web-dl|hdrip|dvdrip|x264|x265|hevc|avc|aac|ac3|dts|yify|rarbg|hdr|10bit|remux)\b.*/gi, '')
+// Normalize a title for comparison: lowercase, strip accents & punctuation,
+// drop a leading article, collapse whitespace.
+function normTitle(s) {
+  return (s || '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/^(the|a|an|le|la|les|un|une)\s+/, '')
+    .replace(/[^a-z0-9]+/g, ' ')
     .trim();
-  const q = encodeURIComponent(clean);
+}
+
+// Token-based similarity in [0,1]: 1 = identical, prefix/superset scores high,
+// otherwise Jaccard over word tokens. Used to reject wrong Cinemeta matches.
+function titleScore(a, b) {
+  const na = normTitle(a), nb = normTitle(b);
+  if (!na || !nb) return 0;
+  if (na === nb) return 1;
+  const ta = new Set(na.split(' ')), tb = new Set(nb.split(' '));
+  const inter = [...ta].filter(t => tb.has(t)).length;
+  const union = new Set([...ta, ...tb]).size;
+  const jaccard = inter / union;
+  // Bonus when one title fully contains the other (e.g. "Dune" vs "Dune Part Two").
+  const contained = na.startsWith(nb) || nb.startsWith(na) ? 0.15 : 0;
+  return Math.min(1, jaccard + contained);
+}
+
+// Parse a raw torrent/file name into a query title + hints (year, series marker).
+function parseRelease(name) {
+  const noExt = name.replace(/\.(mkv|mp4|avi|mov|webm|m4v)$/i, '');
+  const spaced = noExt.replace(/[\._]/g, ' ');
+  const seriesMarker = /\b(s\d{1,2}\s*e\d{1,3}|s\d{1,2}\b|season\s*\d+|\d{1,2}x\d{2})\b/i.test(spaced);
+  // Year (1900–2099) used to disambiguate remakes/same-title works.
+  const yearMatch = spaced.match(/\b(19\d{2}|20\d{2})\b/);
+  const year = yearMatch ? Number(yearMatch[1]) : null;
+  // Title = everything before the first quality/source/year/season tag.
+  const title = spaced
+    .replace(/\b(2160p|1080p|720p|480p|4k|uhd|bluray|blu-ray|webrip|web-dl|web|hdrip|dvdrip|brrip|bdrip|x264|x265|h264|h265|hevc|avc|aac|ac3|dts|ddp?5?1?|yify|yts|rarbg|hdr|hdr10|10bit|remux|proper|repack|extended|imax|s\d{1,2}e\d{1,3}|s\d{1,2}|season|\d{1,2}x\d{2}|19\d{2}|20\d{2})\b.*/i, '')
+    .replace(/[\s\-]+$/, '')
+    .trim();
+  return { title: title || spaced.trim(), year, seriesMarker };
+}
+
+// Resolve a raw release name to the correct Cinemeta entry. Instead of blindly
+// taking the first movie hit, we search BOTH movie & series, score every
+// candidate on title similarity + year match + type hint, and keep the best
+// only if it clears a confidence threshold — otherwise no poster beats a wrong one.
+export async function fetchMetaFromCinemeta(name) {
+  const { title, year, seriesMarker } = parseRelease(name);
+  const q = encodeURIComponent(title);
   const opts = { signal: AbortSignal.timeout(6000), headers: { 'User-Agent': 'Mozilla/5.0' } };
-  for (const type of ['movie', 'series']) {
+
+  const search = async (type) => {
     try {
       const res = await fetch(`https://v3-cinemeta.strem.io/catalog/${type}/top/search=${q}.json`, opts);
       const data = await res.json();
-      const m = data.metas?.[0];
-      if (!m) continue;
-      return {
-        title: m.name,
-        year: m.year || null,
-        rating: m.imdbRating || null,
-        poster: await fetchImgBase64(m.poster || null),
-      };
-    } catch {}
+      return (data.metas || []).slice(0, 8).map(m => ({ ...m, _type: type }));
+    } catch { return []; }
+  };
+  const [movies, series] = await Promise.all([search('movie'), search('series')]);
+  const candidates = [...movies, ...series];
+  if (!candidates.length) return null;
+
+  let best = null, bestScore = 0;
+  for (const m of candidates) {
+    let score = titleScore(title, m.name);
+    const my = Number(m.year) || Number((m.releaseInfo || '').slice(0, 4)) || null;
+    if (year && my) score += my === year ? 0.25 : (Math.abs(my - year) <= 1 ? 0.05 : -0.2);
+    // Series marker (SxxExx) present → prefer series results and vice-versa.
+    if (seriesMarker) score += m._type === 'series' ? 0.15 : -0.15;
+    if (score > bestScore) { bestScore = score; best = m; }
   }
-  return null;
+  // Require a real title overlap, not just a year/type nudge.
+  if (!best || bestScore < 0.5 || titleScore(title, best.name) < 0.34) return null;
+
+  return {
+    title: best.name,
+    year: best.year || best.releaseInfo || null,
+    rating: best.imdbRating || null,
+    poster: await fetchImgBase64(best.poster || null),
+  };
 }
 
 const DEFAULT_TRACKERS = [
