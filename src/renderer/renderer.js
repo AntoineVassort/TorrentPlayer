@@ -437,7 +437,10 @@ async function doAdd(source, resumePos = null, episodeContext = null) {
     if (r.diskWarning) {
       toast(t('toast.diskLow', { need: fmtSize(r.diskWarning.need), free: fmtSize(r.diskWarning.free) }), true);
     }
-    if (r.videoFiles?.length > 1) openFilePicker(r.id, r.videoFiles);
+    // Don't pop the file picker for an episode request — the correct file in a
+    // season pack is auto-selected in the main process. Only ask the user to
+    // choose for a plain multi-file torrent added without an episode context.
+    if (r.videoFiles?.length > 1 && !episodeContext) openFilePicker(r.id, r.videoFiles);
     return r;
   } catch (err) {
     pendingTorrents.delete(pid);

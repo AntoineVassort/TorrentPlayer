@@ -103,6 +103,52 @@ function findSubtitle(files, videoFile) {
   }) || null;
 }
 
+// Does a filename correspond to a given season/episode? Handles the common
+// release conventions: S01E06 / s1.e6 / 1x06 / "Season 1 Episode 6".
+function matchesEpisode(name, season, episode) {
+  const s = String(season), e = String(episode);
+  const patterns = [
+    new RegExp(`s0*${s}[\\s._-]*e0*${e}(?!\\d)`, 'i'),
+    new RegExp(`(?<!\\d)0*${s}\\s*x\\s*0*${e}(?!\\d)`, 'i'),
+    new RegExp(`season[\\s._-]*0*${s}[\\s._-]*episode[\\s._-]*0*${e}(?!\\d)`, 'i'),
+  ];
+  return patterns.some(p => p.test(name));
+}
+
+// Restrict a torrent's download to a single file. On a multi-file torrent
+// (season pack) WebTorrent selects every file by default, so the episode we
+// actually stream competes for bandwidth with the rest of the pack. Deselecting
+// the others concentrates peers on the chosen episode so it buffers fast.
+function focusFile(torrent, file) {
+  try {
+    for (const f of torrent.files) {
+      if (f !== file) { try { f.deselect(); } catch {} }
+    }
+    file.select();
+  } catch {}
+}
+
+// Re-point an already-active season pack at a different episode (clicking "Watch
+// Now" on E07 while the pack downloaded for E06 is still active). Persists the
+// outgoing episode's progress, swaps the streamed file, resets episode-specific
+// state, and re-focuses the download. Returns false when the episode isn't in
+// the pack so the caller can fall back to the normal duplicate handling.
+function switchEpisodeFile(entry, epCtx) {
+  if (!epCtx || epCtx.season == null || epCtx.episode == null) return false;
+  const match = entry.torrent.files.find(f => isVideo(f.name) && matchesEpisode(f.name, epCtx.season, epCtx.episode));
+  if (!match || match === entry.fileState.file) return match === entry.fileState.file;
+  persistWatchProgress(entry.torrent.infoHash);
+  entry.fileState.file = match;
+  entry.fileState.subtitle = findSubtitle(entry.torrent.files, match);
+  entry.fetchedSubPath = null;
+  entry.resumePos = null;
+  entry.resumeDuration = null;
+  entry.playback = null;
+  entry.episodeContext = epCtx;
+  focusFile(entry.torrent, match);
+  return true;
+}
+
 function applyThrottle(settings) {
   const dl = settings.maxDownload ? settings.maxDownload * 1024 : -1;
   const ul = settings.maxUpload  ? settings.maxUpload  * 1024 : -1;
@@ -125,10 +171,13 @@ function loadSession() {
 }
 
 function saveSession() {
-  const torrents = [...active.values()].map(({ torrent, magnet, resumePos }) => ({
+  const torrents = [...active.values()].map(({ torrent, magnet, resumePos, episodeContext }) => ({
     magnet: magnet || torrent.magnetURI,
     name: torrent.name,
     resumePos: resumePos || null,
+    // Persist the episode so a restored season pack re-selects the right file
+    // instead of falling back to the largest one.
+    episodeContext: episodeContext || null,
   }));
   fs.writeFileSync(sessionPath(), JSON.stringify({ torrents, queueOrder }, null, 2));
 }
@@ -558,9 +607,23 @@ function addTorrentInternal(torrentId, magnet, downloadDir, resumePos = null, ep
         return reject(new Error('Aucun fichier vidéo dans ce torrent'));
       }
 
-      const file = torrent.files[videoFiles[0].index];
+      // Default to the largest video file. But when an episode was requested
+      // (season pack from "Watch Now"), pick the file that matches SxxExx so we
+      // stream the RIGHT episode instead of the biggest one.
+      let selectedIndex = videoFiles[0].index;
+      let episodeMatched = false;
+      if (episodeContext && episodeContext.season != null && episodeContext.episode != null) {
+        const match = videoFiles.find(vf => matchesEpisode(vf.name, episodeContext.season, episodeContext.episode));
+        if (match) { selectedIndex = match.index; episodeMatched = true; }
+      }
+      const file = torrent.files[selectedIndex];
       const subtitle = findSubtitle(torrent.files, file);
       const fileState = { file, subtitle };
+
+      // Focus the download on the chosen file. Without this a season pack
+      // downloads all episodes with no priority, so the picked episode's pieces
+      // trickle in "randomly" and playback never reaches the 5% ready threshold.
+      focusFile(torrent, file);
 
       // Random token gating LAN access. Loopback requests (the local player) are
       // always allowed; once the server is rebound to 0.0.0.0 for casting, any
@@ -629,7 +692,7 @@ function addTorrentInternal(torrentId, magnet, downloadDir, resumePos = null, ep
             applyQueueRules();
           });
 
-          resolve({ id: torrent.infoHash, name: file.name, videoFiles: videoFiles.length > 1 ? videoFiles : [] });
+          resolve({ id: torrent.infoHash, name: file.name, videoFiles: videoFiles.length > 1 ? videoFiles : [], episodeMatched });
         });
         server.once('error', (err) => {
           if (err.code === 'EADDRINUSE') tryListen(port + 1);
@@ -722,9 +785,9 @@ app.whenReady().then(async () => {
     applyThrottle(settings);
     const { torrents, queueOrder: savedQueue } = loadSession();
     queueOrder = savedQueue;
-    for (const { magnet, resumePos } of torrents) {
+    for (const { magnet, resumePos, episodeContext } of torrents) {
       try {
-        const result = await addTorrentInternal(magnet, magnet, settings.downloadDir, resumePos);
+        const result = await addTorrentInternal(magnet, magnet, settings.downloadDir, resumePos, episodeContext || null);
         if (result.name) {
           fetchMetaFromCinemeta(result.name).then(meta => {
             const entry = active.get(result.id);
@@ -792,7 +855,16 @@ ipcMain.handle('torrent:add', async (_, source, resumePos = null, episodeContext
     const hashMatch = magnet.match(/xt=urn:btih:([0-9a-f]{40}|[A-Z2-7]{32})/i);
     if (hashMatch) {
       const hash = hashMatch[1].toLowerCase();
-      if (active.has(hash)) throw new Error('already_downloading');
+      const entry = active.get(hash);
+      if (entry) {
+        // Same season pack already active — if a different episode was requested,
+        // switch the streamed file instead of rejecting as a duplicate.
+        if (epCtx && switchEpisodeFile(entry, epCtx)) {
+          saveSession();
+          return { id: hash, name: entry.fileState.file.name, videoFiles: [], episodeMatched: true, diskWarning: null };
+        }
+        throw new Error('already_downloading');
+      }
     }
   }
 
@@ -845,6 +917,7 @@ ipcMain.handle('torrent:changeFile', (_, id, fileIndex) => {
   if (!file) throw new Error('Fichier introuvable');
   entry.fileState.file = file;
   entry.fileState.subtitle = findSubtitle(entry.torrent.files, file);
+  focusFile(entry.torrent, file);
   return true;
 });
 
