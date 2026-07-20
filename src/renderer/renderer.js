@@ -5,13 +5,7 @@ let settings = {};
 let players = [];
 let pendingClipboardMagnet = null;
 let filePickerTorrentId = null;
-let castTargetId = null;
 let searchFilters = { category: 'tout', quality: 'tout' };
-let nextEpisodeData = null;
-let nextEpisodeTimer = null;
-let nextEpisodeReadyIv = null;
-let downloadOverlayId = null;     // torrent id tracked by the Popcorn Time download overlay
-let downloadOverlayIv = null;
 const pendingTorrents = new Map();
 
 async function init() {
@@ -339,63 +333,6 @@ function hideSearchPanel() {
   sr.classList.remove('expanded');
 }
 
-// --- Download overlay (Popcorn Time "Watch Now" → buffering screen) ---
-
-// Add a torrent and show the fullscreen download overlay; auto-launch the player
-// once enough is buffered. `meta` = { title, poster } for the overlay backdrop/title.
-function watchNow(magnet, episodeContext, meta) {
-  showDownloadOverlay(meta);
-  doAdd(magnet, null, episodeContext).then(r => {
-    if (!r || !r.id) { hideDownloadOverlay(); return; }
-    downloadOverlayId = r.id;
-    updateDownloadOverlay();
-    clearInterval(downloadOverlayIv);
-    let tries = 0;
-    downloadOverlayIv = setInterval(() => {
-      tries++;
-      const tr = torrents.find(x => x.id === downloadOverlayId);
-      if (tr && tr.playback) { clearInterval(downloadOverlayIv); hideDownloadOverlay(); }
-      else if (tr && tr.ready) { clearInterval(downloadOverlayIv); play(downloadOverlayId); hideDownloadOverlay(); }
-      else if (tries > 180) { clearInterval(downloadOverlayIv); hideDownloadOverlay(); toast(t('overlay.background')); }
-    }, 1000);
-  }).catch(() => hideDownloadOverlay());
-}
-
-function showDownloadOverlay(meta) {
-  document.getElementById('dl-ov-title').textContent = meta?.title || '';
-  document.getElementById('dl-ov-bg').style.backgroundImage = meta?.poster ? `url("${meta.poster}")` : '';
-  document.getElementById('dl-ov-bar').style.width = '0%';
-  document.getElementById('dl-ov-pct').textContent = '0%';
-  document.getElementById('dl-ov-dl').textContent = '—';
-  document.getElementById('dl-ov-ul').textContent = '—';
-  document.getElementById('dl-ov-peers').textContent = '0';
-  document.getElementById('download-overlay').classList.remove('hidden');
-}
-
-function hideDownloadOverlay() {
-  clearInterval(downloadOverlayIv);
-  downloadOverlayId = null;
-  document.getElementById('download-overlay').classList.add('hidden');
-}
-
-function updateDownloadOverlay() {
-  if (document.getElementById('download-overlay').classList.contains('hidden')) return;
-  const tr = torrents.find(x => x.id === downloadOverlayId);
-  if (!tr) return;
-  const pct = Math.round((tr.progress || 0) * 100);
-  document.getElementById('dl-ov-bar').style.width = pct + '%';
-  document.getElementById('dl-ov-pct').textContent = pct + '%';
-  document.getElementById('dl-ov-dl').textContent = fmt(tr.downloadSpeed || 0);
-  document.getElementById('dl-ov-ul').textContent = fmt(tr.uploadSpeed || 0);
-  document.getElementById('dl-ov-peers').textContent = String(tr.numPeers || 0);
-}
-
-function cancelDownloadOverlay() {
-  const id = downloadOverlayId;
-  hideDownloadOverlay();
-  if (id) window.api.removeTorrent(id).catch(() => {});
-}
-
 // Badge on the Downloads icon = count of active + pending torrents.
 function updateDownloadsBadge() {
   const badge = document.getElementById('pt-dl-badge');
@@ -716,58 +653,6 @@ async function remove(id, card) {
   catch (err) { card.classList.remove('removing'); toast(err.message, true); }
 }
 
-// --- Chromecast ---
-
-async function openCastPicker(id) {
-  castTargetId = id;
-  const modal = document.getElementById('cast-modal');
-  const scanning = document.getElementById('cast-scanning');
-  const deviceList = document.getElementById('device-list');
-  const castEmpty = document.getElementById('cast-empty');
-
-  scanning.classList.remove('hidden');
-  deviceList.classList.add('hidden');
-  castEmpty.classList.add('hidden');
-  deviceList.textContent = '';
-  modal.classList.remove('hidden');
-
-  scanning.textContent = t('cast.scanning');
-  try {
-    const devices = await window.api.discoverDevices();
-    scanning.classList.add('hidden');
-    if (!devices.length) {
-      castEmpty.textContent = t('cast.noDevices');
-      castEmpty.classList.remove('hidden');
-    } else {
-      for (const d of devices) {
-        const item = document.createElement('button');
-        item.className = 'file-item';
-        item.innerHTML = `<span class="file-item-name">📺 ${esc(d.name)}</span><span class="file-item-size">${esc(d.host)}</span>`;
-        item.addEventListener('click', async () => {
-          closeCastModal();
-          try {
-            await window.api.castToDevice(castTargetId, d.host, d.type);
-            toast(t('cast.started', { name: d.name }));
-          } catch (err) {
-            toast(err.message, true);
-          }
-        });
-        deviceList.appendChild(item);
-      }
-      deviceList.classList.remove('hidden');
-    }
-  } catch (err) {
-    scanning.classList.add('hidden');
-    castEmpty.textContent = t('cast.error', { msg: err.message });
-    castEmpty.classList.remove('hidden');
-  }
-}
-
-function closeCastModal() {
-  document.getElementById('cast-modal').classList.add('hidden');
-  castTargetId = null;
-}
-
 // --- File picker ---
 
 function openFilePicker(torrentId, files) {
@@ -860,61 +745,6 @@ function showClipboardBanner(magnet) {
 function hideClipboardBanner() {
   document.getElementById('clipboard-banner').classList.add('hidden');
   pendingClipboardMagnet = null;
-}
-
-// --- Next episode ---
-
-function showNextEpisodeBanner(data) {
-  if (!data || !data.magnet) return;
-  nextEpisodeData = data;
-  const banner = document.getElementById('next-episode-banner');
-  const poster = document.getElementById('next-ep-poster');
-  const text = document.getElementById('next-ep-text');
-  if (data.poster) { poster.src = data.poster; poster.classList.remove('hidden'); }
-  else poster.classList.add('hidden');
-
-  clearTimeout(nextEpisodeTimer);
-  if (data.autoPlay) {
-    let s = 8;
-    const tick = () => {
-      if (s < 0) { triggerNextEpisode(); return; }
-      text.textContent = t('nextEp.countdown', { label: data.label, s });
-      s--;
-      nextEpisodeTimer = setTimeout(tick, 1000);
-    };
-    tick();
-  } else {
-    text.textContent = t('nextEp.label', { label: data.label });
-  }
-  banner.classList.remove('hidden');
-}
-
-function hideNextEpisodeBanner() {
-  clearTimeout(nextEpisodeTimer);
-  nextEpisodeTimer = null;
-  document.getElementById('next-episode-banner').classList.add('hidden');
-}
-
-async function triggerNextEpisode() {
-  const data = nextEpisodeData;
-  hideNextEpisodeBanner();
-  if (!data) return;
-  document.querySelector('.add-tab[data-tab="magnet"]')?.click();
-  try {
-    const r = await doAdd(data.magnet, null, data.context);
-    if (r && r.id) autoPlayWhenReady(r.id);
-  } catch {}
-}
-
-function autoPlayWhenReady(id) {
-  clearInterval(nextEpisodeReadyIv);
-  let tries = 0;
-  nextEpisodeReadyIv = setInterval(() => {
-    tries++;
-    const tr = torrents.find(x => x.id === id);
-    if (tr && tr.ready) { clearInterval(nextEpisodeReadyIv); play(id); }
-    else if (tries > 150) clearInterval(nextEpisodeReadyIv);   // give up after ~2.5 min
-  }, 1000);
 }
 
 // --- About ---
