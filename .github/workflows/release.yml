@@ -30,6 +30,15 @@ jobs:
         include:
           - os: windows-latest
             script: dist
+          # macOS jobs pin their BUILD HOST to Node 20: node-datachannel's
+          # from-source path runs `prebuild -r napi`, and prebuild 13.0.1 (via
+          # napi-build-utils 1.0.2) reads the napi versions from npm lifecycle
+          # env vars that npm no longer exports under Node 22 — it then fails with
+          # "N-API version undefined" / "expected first argument to be an array".
+          # Bisected on 2026-09-07: v1.11.11 code + Node 22 fails, v1.12.0 code +
+          # Node 20 passes. Harmless to pin: the shipped binary is NAPI-built
+          # against Electron, so the build host's Node never reaches the artifact.
+          #
           # The upstream node-datachannel macOS prebuilts are compiled on recent
           # runners (macos-15-intel / macos-14) with no deployment-target floor, so
           # they link against newer libc++ symbols (e.g. basic_ifstream VTT) absent
@@ -41,11 +50,13 @@ jobs:
             script: dist:mac-x64
             buildFromSource: 'node-datachannel'
             deploymentTarget: '10.15'
+            nodeVersion: '20'
             opensslRoot: /usr/local/opt/openssl@3
           - os: macos-14
             script: dist:mac-arm64
             buildFromSource: 'node-datachannel'
             deploymentTarget: '11.0'
+            nodeVersion: '20'
             opensslRoot: /opt/homebrew/opt/openssl@3
           - os: ubuntu-latest
             script: dist:linux
@@ -55,7 +66,7 @@ jobs:
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: '22'
+          node-version: ${{ matrix.nodeVersion || '22' }}
           cache: 'npm'
 
       - name: Install OpenSSL (node-datachannel source build)
