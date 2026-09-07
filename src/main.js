@@ -11,11 +11,11 @@ import { registerMetadataIpc, fetchMetaFromCinemeta } from './metadata.js';
 import { registerUpdaterIpc } from './updater.js';
 import {
   refreshTrackers, applyThrottle, loadSession, saveSession,
-  applyQueueRules, addTorrentInternal, deleteTorrentFiles,
+  applyQueueRules, addTorrentInternal, deleteTorrentFiles, isReadyToPlay,
 } from './torrentManager.js';
 import { registerPlaybackIpc } from './playback.js';
 import { checkFollows } from './watchProgress.js';
-import { registerAppIpc } from './ipcHandlers.js';
+import { registerAppIpc, safeOpenExternal } from './ipcHandlers.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -84,6 +84,21 @@ function createWindow() {
   Menu.setApplicationMenu(null);
   win.loadFile(path.join(__dirname, 'renderer/index.html'));
 
+  // The renderer only ever loads its own local files. A window opened from it
+  // would inherit the preload, and a navigation away from index.html would
+  // strand the app — so deny both, and send genuine outbound links through the
+  // same http/https filter as the IPC "open link" handler.
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    safeOpenExternal(url);
+    return { action: 'deny' };
+  });
+  win.webContents.on('will-navigate', (e, url) => {
+    if (url !== win.webContents.getURL()) {
+      e.preventDefault();
+      safeOpenExternal(url);
+    }
+  });
+
   win.on('resize', saveBounds);
   win.on('move',   saveBounds);
   win.on('maximize',   () => win.webContents.send('window:maximize'));
@@ -146,7 +161,7 @@ app.whenReady().then(async () => {
         numPeers: torrent.numPeers,
         done: torrent.done,
         paused: torrent.paused,
-        ready: fileProgress >= 0.05 || torrent.done,
+        ready: isReadyToPlay(torrent, file),
         timeRemaining: torrent.timeRemaining,
         hasSubtitle: !!fileState.subtitle,
         speedHistory: [...speedHistory],

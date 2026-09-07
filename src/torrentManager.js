@@ -18,6 +18,66 @@ const SUBTITLE_EXTENSIONS = ['.srt', '.ass', '.ssa', '.vtt', '.sub'];
 export function isVideo(name)    { return VIDEO_EXTENSIONS.includes(path.extname(name).toLowerCase()); }
 export function isSubtitle(name) { return SUBTITLE_EXTENSIONS.includes(path.extname(name).toLowerCase()); }
 
+// Content-Type served by the streaming server. VLC and mpv sniff the container
+// and ignore this, but Chromecast and DLNA renderers trust the header — serving
+// an .mkv as video/mp4 made them refuse the stream outright.
+const MIME_TYPES = {
+  '.mp4': 'video/mp4',
+  '.m4v': 'video/mp4',
+  '.mkv': 'video/x-matroska',
+  '.webm': 'video/webm',
+  '.avi': 'video/x-msvideo',
+  '.mov': 'video/quicktime',
+  '.ts': 'video/mp2t',
+  '.flv': 'video/x-flv',
+};
+
+function mimeFor(name) {
+  return MIME_TYPES[path.extname(name).toLowerCase()] || 'video/mp4';
+}
+
+// Returned by parseRange for a syntactically valid but unsatisfiable range, so
+// the caller answers 416 instead of streaming garbage.
+const INVALID_RANGE = Symbol('invalid-range');
+
+// Parse a Range header into { start, end } (inclusive), null when absent or not
+// a byte range, INVALID_RANGE when unsatisfiable.
+//
+// Naive `parseInt(split('-'))` handles only `bytes=N-M`. Suffix ranges
+// (`bytes=-500`, "the last 500 bytes") yielded start=NaN and a
+// `Content-Range: bytes NaN-…`, and an oversized end was never clamped to the
+// file. mpv and VLC only ever send `bytes=N-`, but Chromecast and DLNA
+// renderers probe with the other forms.
+export function parseRange(header, total) {
+  if (!header) return null;
+  const m = /^bytes=(.+)$/i.exec(String(header).trim());
+  if (!m) return null;
+  // A multi-range request would need multipart/byteranges; no player sends one,
+  // so serve the first range rather than failing.
+  const spec = m[1].split(',')[0].trim();
+  const parts = /^(\d*)-(\d*)$/.exec(spec);
+  if (!parts) return INVALID_RANGE;
+  const [, rawStart, rawEnd] = parts;
+  if (!rawStart && !rawEnd) return INVALID_RANGE;
+  if (total <= 0) return INVALID_RANGE;
+
+  let start, end;
+  if (!rawStart) {
+    // Suffix form: the last N bytes.
+    const suffix = Number(rawEnd);
+    if (!suffix) return INVALID_RANGE;
+    start = Math.max(0, total - suffix);
+    end = total - 1;
+  } else {
+    start = Number(rawStart);
+    end = rawEnd ? Number(rawEnd) : total - 1;
+  }
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return INVALID_RANGE;
+  end = Math.min(end, total - 1);
+  if (start > end || start >= total) return INVALID_RANGE;
+  return { start, end };
+}
+
 export function findSubtitle(files, videoFile) {
   const base = path.basename(videoFile.name, path.extname(videoFile.name)).toLowerCase();
   return files.find(f => {
@@ -50,6 +110,32 @@ export function focusFile(torrent, file) {
     }
     file.select();
   } catch {}
+}
+
+// Head buffer required before playback is offered: 5% of the file, capped.
+// Uncapped, a 15 GB 4K remux made the user wait for 750 MB when mpv/VLC only
+// need a few tens of MB to start.
+const READY_MAX_BYTES = 40 * 1024 * 1024;
+
+// Is enough of the START of the file downloaded to hand it to the player?
+//
+// The old rule compared `file.downloaded / file.length` to 5%, which is wrong
+// twice over: it over-waits on big files, and `downloaded` counts bytes
+// ANYWHERE in the file — 5% scattered across the middle leaves the player with
+// nothing to read. Check the actual leading pieces via the bitfield instead.
+export function isReadyToPlay(torrent, file) {
+  if (torrent.done) return true;
+  if (!file || !file.length) return false;
+  const need = Math.min(file.length * 0.05, READY_MAX_BYTES);
+  const { pieceLength, bitfield } = torrent;
+  // Metadata not in yet (no bitfield) — fall back to the old ratio.
+  if (!pieceLength || !bitfield) return file.downloaded / file.length >= 0.05;
+  const firstPiece = Math.floor(file.offset / pieceLength);
+  const lastPiece  = Math.floor((file.offset + need - 1) / pieceLength);
+  for (let i = firstPiece; i <= lastPiece; i++) {
+    if (!bitfield.get(i)) return false;
+  }
+  return true;
 }
 
 // Re-point an already-active season pack at a different episode (clicking "Watch
@@ -226,21 +312,26 @@ export function addTorrentInternal(torrentId, magnet, downloadDir, resumePos = n
         }
         const f = fileState.file;
         const total = f.length;
-        const range = req.headers['range'];
+        const contentType = mimeFor(f.name);
+        const range = parseRange(req.headers['range'], total);
+
+        if (range === INVALID_RANGE) {
+          res.writeHead(416, { 'Content-Range': `bytes */${total}`, 'Content-Type': contentType });
+          res.end();
+          return;
+        }
         if (range) {
-          const [s, e] = range.replace('bytes=', '').split('-');
-          const start = parseInt(s, 10);
-          const end = e ? parseInt(e, 10) : total - 1;
+          const { start, end } = range;
           res.writeHead(206, {
             'Content-Range': `bytes ${start}-${end}/${total}`,
             'Accept-Ranges': 'bytes',
             'Content-Length': end - start + 1,
-            'Content-Type': 'video/mp4',
+            'Content-Type': contentType,
           });
           const stream = f.createReadStream({ start, end });
           stream.on('error', () => {}); stream.pipe(res);
         } else {
-          res.writeHead(200, { 'Content-Length': total, 'Content-Type': 'video/mp4', 'Accept-Ranges': 'bytes' });
+          res.writeHead(200, { 'Content-Length': total, 'Content-Type': contentType, 'Accept-Ranges': 'bytes' });
           const stream = f.createReadStream();
           stream.on('error', () => {}); stream.pipe(res);
         }

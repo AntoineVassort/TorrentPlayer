@@ -185,50 +185,112 @@ function buildMagnet(s) {
   return `magnet:?xt=urn:btih:${s.infoHash}${tr}`;
 }
 
+// --- Anime catalog (two sources) ---
+//
+// Jikan is the preferred source (MyAnimeList ranking) but its aggregate
+// endpoints (/top/anime, /seasons/now) answer 504 for long stretches while the
+// rest of the API stays up — that used to leave the Anime tab silently empty.
+// Kitsu serves the same shape ordered by user count and is the fallback.
+// Both throw on failure so the caller can try the next source.
+
+const ANIME_PAGE = 20; // Kitsu rejects page[limit] above 20; Jikan pages are 25
+
+async function fetchTopAnimeJikan(p, opts) {
+  const res = await fetch(`https://api.jikan.moe/v4/top/anime?type=tv&page=${p}`, opts);
+  if (!res.ok) throw new Error(`jikan ${res.status}`);
+  const data = await res.json();
+  return await Promise.all((data?.data || []).map(async a => ({
+    title: a.title_english || a.title,
+    year: a.year || null,
+    rating: a.score || null,
+    type: 'anime',
+    genres: (a.genres || []).map(g => g.name),
+    posterUrl: await fetchImgBase64(
+                 a.images?.jpg?.large_image_url || a.images?.jpg?.image_url,
+                 'https://myanimelist.net'
+               ) || await fetchItunesPoster(a.title_english || a.title, a.year, 'tv'),
+  })));
+}
+
+async function fetchTopAnimeKitsu(p, opts) {
+  const offset = (p - 1) * ANIME_PAGE;
+  const res = await fetch(
+    `https://kitsu.io/api/edge/anime?sort=-userCount&page[limit]=${ANIME_PAGE}`
+      + `&page[offset]=${offset}&include=categories`,
+    { ...opts, headers: { ...opts.headers, Accept: 'application/vnd.api+json' } }
+  );
+  if (!res.ok) throw new Error(`kitsu ${res.status}`);
+  const data = await res.json();
+  // `include=categories` returns the category records side-by-side in
+  // `included`; each anime only carries their ids in its relationships.
+  const catTitles = new Map(
+    (data.included || [])
+      .filter(i => i.type === 'categories')
+      .map(i => [i.id, i.attributes?.title])
+  );
+  return await Promise.all((data.data || []).map(async item => {
+    const a = item.attributes || {};
+    const title = a.titles?.en || a.titles?.en_us || a.canonicalTitle;
+    const year = a.startDate ? Number(a.startDate.slice(0, 4)) : null;
+    return {
+      title,
+      year,
+      // Kitsu rates out of 100, the UI (and Jikan) expect out of 10.
+      rating: a.averageRating ? Number((Number(a.averageRating) / 10).toFixed(1)) : null,
+      type: 'anime',
+      genres: (item.relationships?.categories?.data || [])
+        .map(c => catTitles.get(c.id)).filter(Boolean).slice(0, 4),
+      posterUrl: await fetchImgBase64(
+                   a.posterImage?.medium || a.posterImage?.small || a.posterImage?.original || null,
+                   'https://kitsu.io'
+                 ) || await fetchItunesPoster(title, year, 'tv'),
+    };
+  }));
+}
+
 // Register the catalog/stream IPC handlers. Called once from main.js.
 export function registerMetadataIpc() {
   // Paginated catalog. `page` is 1-based. Movies & series come from Cinemeta
-  // "top" (skip-paginated, imdb ids → detail/episodes work); anime from Jikan.
+  // "top" (skip-paginated, imdb ids → detail/episodes work); anime from Jikan
+  // with a Kitsu fallback.
+  //
+  // An empty array means "nothing more to show" (end of catalog) — the renderer
+  // stops paginating on it. A real failure REJECTS so the renderer can show its
+  // error state instead of an unexplained empty grid.
   ipcMain.handle('discover:fetch', async (_, cat, page = 1) => {
     const opts = { signal: AbortSignal.timeout(8000) };
     const PAGE = 50;
     const p = Math.max(1, Number(page) || 1);
-    try {
-      if (cat === 'movies' || cat === 'series') {
-        const kind = cat === 'movies' ? 'movie' : 'series';
-        const skip = (p - 1) * PAGE;
-        const url = skip
-          ? `https://v3-cinemeta.strem.io/catalog/${kind}/top/skip=${skip}.json`
-          : `https://v3-cinemeta.strem.io/catalog/${kind}/top.json`;
-        const res = await fetch(url, opts);
-        const data = await res.json();
-        const metas = (data.metas || []).slice(0, PAGE);
-        return await Promise.all(metas.map(async m => ({
-          title: m.name,
-          year: m.year || m.releaseInfo || null,
-          rating: m.imdbRating || null,
-          imdbId: m.id || null,
-          type: kind,
-          genres: m.genres || m.genre || [],
-          posterUrl: await fetchImgBase64(m.poster || null),
-        })));
+
+    if (cat === 'movies' || cat === 'series') {
+      const kind = cat === 'movies' ? 'movie' : 'series';
+      const skip = (p - 1) * PAGE;
+      const url = skip
+        ? `https://v3-cinemeta.strem.io/catalog/${kind}/top/skip=${skip}.json`
+        : `https://v3-cinemeta.strem.io/catalog/${kind}/top.json`;
+      const res = await fetch(url, opts);
+      if (!res.ok) throw new Error(`cinemeta ${res.status}`);
+      const data = await res.json();
+      const metas = (data.metas || []).slice(0, PAGE);
+      return await Promise.all(metas.map(async m => ({
+        title: m.name,
+        year: m.year || m.releaseInfo || null,
+        rating: m.imdbRating || null,
+        imdbId: m.id || null,
+        type: kind,
+        genres: m.genres || m.genre || [],
+        posterUrl: await fetchImgBase64(m.poster || null),
+      })));
+    }
+
+    if (cat === 'anime') {
+      try {
+        return await fetchTopAnimeJikan(p, opts);
+      } catch {
+        return await fetchTopAnimeKitsu(p, opts); // rejects if Kitsu is down too
       }
-      if (cat === 'anime') {
-        const res = await fetch(`https://api.jikan.moe/v4/top/anime?type=tv&page=${p}`, opts);
-        const data = await res.json();
-        return await Promise.all((data?.data || []).map(async a => ({
-          title: a.title_english || a.title,
-          year: a.year || null,
-          rating: a.score || null,
-          type: 'anime',
-          genres: (a.genres || []).map(g => g.name),
-          posterUrl: await fetchImgBase64(
-                       a.images?.jpg?.large_image_url || a.images?.jpg?.image_url,
-                       'https://myanimelist.net'
-                     ) || await fetchItunesPoster(a.title_english || a.title, a.year, 'tv'),
-        })));
-      }
-    } catch { /* network blocked or timeout — return empty */ }
+    }
+
     return [];
   });
 

@@ -58,7 +58,7 @@ function ensureLanReachable(entry) {
   });
 }
 
-function safeOpenExternal(url) {
+export function safeOpenExternal(url) {
   try {
     const u = new URL(url);
     if (u.protocol !== 'https:' && u.protocol !== 'http:') return;

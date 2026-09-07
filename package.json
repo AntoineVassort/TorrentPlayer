@@ -1,6 +1,6 @@
 {
   "name": "torrent-player",
-  "version": "1.11.11",
+  "version": "1.12.0",
   "description": "Stream torrents via an external player",
   "type": "module",
   "main": "src/main.js",
@@ -17,13 +17,13 @@
   "dependencies": {
     "chromecasts": "^1.10.2",
     "dlnacasts": "^0.1.0",
-    "webtorrent": "^2.5.0"
+    "webtorrent": "^3.0.21"
   },
   "devDependencies": {
-    "@electron/packager": "^20.0.0",
-    "electron": "^42.0.1",
-    "eslint": "^10.4.1",
-    "globals": "^17.6.0",
+    "@electron/packager": "^20.3.0",
+    "electron": "^42.11.2",
+    "eslint": "^10.10.0",
+    "globals": "^17.12.0",
     "sharp": "^0.33.5"
   }
 }
