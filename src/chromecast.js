@@ -1,13 +1,27 @@
 import os from 'os';
 import chromecasts from 'chromecasts';
 
-export function getLocalIP() {
+const ipToInt = (ip) => ip.split('.').reduce((n, o) => (n << 8) + Number(o), 0) >>> 0;
+
+// Pick the local IPv4 the cast device can actually reach: the one on the same
+// subnet as `targetHost`. Falling back to the first non-internal address picks
+// virtual adapters (WSL/Hyper-V, link-local 169.254.x) that a TV can't route to.
+export function getLocalIP(targetHost) {
+  const candidates = [];
   for (const iface of Object.values(os.networkInterfaces())) {
     for (const addr of iface) {
-      if (addr.family === 'IPv4' && !addr.internal) return addr.address;
+      if (addr.family === 'IPv4' && !addr.internal && !addr.address.startsWith('169.254.')) candidates.push(addr);
     }
   }
-  return '127.0.0.1';
+  if (targetHost && /^\d+\.\d+\.\d+\.\d+$/.test(targetHost)) {
+    const target = ipToInt(targetHost);
+    const same = candidates.find((a) => {
+      const mask = ipToInt(a.netmask);
+      return (ipToInt(a.address) & mask) === (target & mask);
+    });
+    if (same) return same.address;
+  }
+  return candidates[0]?.address || '127.0.0.1';
 }
 
 export function discoverDevices(timeoutMs = 4000) {

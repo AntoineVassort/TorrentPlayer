@@ -291,7 +291,7 @@ export function registerAppIpc() {
     const entry = active.get(id);
     if (!entry) throw new Error('Torrent introuvable');
     await ensureLanReachable(entry);
-    const url = `http://${getLocalIP()}:${entry.port}/${entry.streamToken}`;
+    const url = `http://${getLocalIP(host)}:${entry.port}/${entry.streamToken}`;
     if (deviceType === 'dlna') await castDlna(host, url);
     else await castMedia(host, url);
     entry.casting = host;
