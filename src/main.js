@@ -149,12 +149,14 @@ app.whenReady().then(async () => {
       if (speedHistory.length > 30) speedHistory.shift();
 
       const file = fileState.file;
-      const fileProgress = file && file.length > 0 ? file.downloaded / file.length : torrent.progress;
+      // file.downloaded / torrent.progress walk every piece of the file — read once per tick.
+      const fileDownloaded = file ? file.downloaded : 0;
+      const fileProgress = file && file.length > 0 ? fileDownloaded / file.length : torrent.progress;
       return {
         id: torrent.infoHash,
         name: file ? file.name : torrent.name,
         size: file ? file.length : 0,
-        downloaded: file ? file.downloaded : 0,
+        downloaded: fileDownloaded,
         progress: fileProgress,
         downloadSpeed: torrent.downloadSpeed,
         uploadSpeed: torrent.uploadSpeed,

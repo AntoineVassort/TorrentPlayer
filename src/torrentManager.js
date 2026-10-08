@@ -258,6 +258,18 @@ export function applyQueueRules() {
 
 // --- Add torrent (shared logic) ---
 
+// Players (VLC especially) open many Range requests and drop them on seek/probe,
+// often with an open-ended range up to EOF. pipe() does NOT destroy the source
+// when the destination closes, so each abandoned stream kept reading and
+// prioritising pieces of a multi-GB file forever. Tear the source down with the socket.
+function pipeFileStream(stream, res) {
+  stream.on('error', () => {});
+  const cleanup = () => { if (!stream.destroyed) stream.destroy(); };
+  res.on('close', cleanup);
+  res.on('error', cleanup);
+  stream.pipe(res);
+}
+
 export function addTorrentInternal(torrentId, magnet, downloadDir, resumePos = null, episodeContext = null) {
   return new Promise((resolve, reject) => {
     const opts = { announce: activeTrackers };
@@ -328,12 +340,10 @@ export function addTorrentInternal(torrentId, magnet, downloadDir, resumePos = n
             'Content-Length': end - start + 1,
             'Content-Type': contentType,
           });
-          const stream = f.createReadStream({ start, end });
-          stream.on('error', () => {}); stream.pipe(res);
+          pipeFileStream(f.createReadStream({ start, end }), res);
         } else {
           res.writeHead(200, { 'Content-Length': total, 'Content-Type': contentType, 'Accept-Ranges': 'bytes' });
-          const stream = f.createReadStream();
-          stream.on('error', () => {}); stream.pipe(res);
+          pipeFileStream(f.createReadStream(), res);
         }
       });
 
