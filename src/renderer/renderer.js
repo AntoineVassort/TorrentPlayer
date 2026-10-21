@@ -594,6 +594,14 @@ function updateCard(card, torrent) {
   const localBtn = card.querySelector('.btn-local');
   localBtn.classList.toggle('hidden', !torrent.done);
 
+  // The streamed file can change after creation (file picker, episode switch):
+  // keep the title in sync so the user knows which episode Play will launch.
+  const nameEl = card.querySelector('.card-name');
+  if (nameEl && nameEl.textContent !== torrent.name) {
+    nameEl.textContent = torrent.name;
+    nameEl.title = torrent.name;
+  }
+
   const castBtn = card.querySelector('.btn-cast');
   castBtn.classList.toggle('hidden', !torrent.ready);
 
@@ -607,13 +615,25 @@ function updateCard(card, torrent) {
   // Playback / casting bar
   const playbackBar = card.querySelector('.playback-bar');
   if (torrent.casting) {
-    playbackBar.textContent = t('cast.inProgress', { name: torrent.casting });
+    if (playbackBar.dataset.cast !== torrent.casting) {
+      playbackBar.dataset.cast = torrent.casting;
+      playbackBar.innerHTML = `<span>${esc(t('cast.inProgress', { name: torrent.casting }))}</span> <button class="btn-cast-subs hidden"></button> <button class="btn-cast-stop">${esc(t('cast.stop'))}</button>`;
+      playbackBar.querySelector('.btn-cast-stop').addEventListener('click', () => window.api.stopCast(torrent.id));
+      const subsBtn = playbackBar.querySelector('.btn-cast-subs');
+      subsBtn.addEventListener('click', () => window.api.castSubtitles(torrent.id, subsBtn.dataset.state !== 'on'));
+    }
+    const subsBtn = playbackBar.querySelector('.btn-cast-subs');
+    subsBtn.classList.toggle('hidden', !torrent.castSubs);
+    subsBtn.dataset.state = torrent.castSubs || '';
+    subsBtn.textContent = t(torrent.castSubs === 'on' ? 'cast.subsOn' : 'cast.subsOff');
     playbackBar.classList.remove('hidden');
   } else if (torrent.playback) {
+    delete playbackBar.dataset.cast;
     const dur = torrent.playback.duration > 0 ? ` / ${fmtTime(torrent.playback.duration)}` : '';
     playbackBar.textContent = t('card.playing', { pos: fmtTime(torrent.playback.pos), dur });
     playbackBar.classList.remove('hidden');
   } else {
+    delete playbackBar.dataset.cast;
     playbackBar.classList.add('hidden');
   }
 
@@ -659,6 +679,17 @@ function openFilePicker(torrentId, files) {
   filePickerTorrentId = torrentId;
   const list = document.getElementById('file-list');
   list.innerHTML = '';
+  const all = document.createElement('button');
+  all.className = 'file-item file-item-all';
+  all.innerHTML = `<span class="file-item-name">${esc(t('modal.downloadAll'))}</span><span class="file-item-size">${files.length} · ${fmtSize(files.reduce((n, f) => n + f.size, 0))}</span>`;
+  all.addEventListener('click', async () => {
+    try {
+      await window.api.downloadAll(torrentId);
+      toast(t('toast.downloadAll', { n: files.length }));
+    } catch (err) { toast(err.message, true); }
+    closeFilePicker();
+  });
+  list.appendChild(all);
   for (const f of files) {
     const item = document.createElement('button');
     item.className = 'file-item';
@@ -761,5 +792,14 @@ async function initWinCtrl() {
   document.getElementById('btn-maximize').addEventListener('click', () => window.api.maximize());
   document.getElementById('btn-close').addEventListener('click',    () => window.api.close());
 }
+
+// Freeze diagnostics: report main-thread long tasks to the main process (perf.log).
+try {
+  new PerformanceObserver(list => {
+    for (const e of list.getEntries()) {
+      if (e.duration >= 200) console.warn(`[perf] long task ${e.duration.toFixed(0)}ms`);
+    }
+  }).observe({ entryTypes: ['longtask'] });
+} catch {}
 
 init();

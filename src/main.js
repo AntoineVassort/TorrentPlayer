@@ -15,6 +15,7 @@ import {
 } from './torrentManager.js';
 import { registerPlaybackIpc } from './playback.js';
 import { checkFollows } from './watchProgress.js';
+import { startPerfLog } from './perfLog.js';
 import { registerAppIpc, safeOpenExternal } from './ipcHandlers.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -132,9 +133,14 @@ function createTray() {
 
 // --- App lifecycle ---
 
+// Network libs (castv2, DLNA) can throw from socket callbacks we can't wrap;
+// log instead of letting Electron show a fatal "JavaScript error" dialog.
+process.on('uncaughtException', err => console.error('[uncaught]', err));
+
 app.whenReady().then(async () => {
   createWindow();
   createTray();
+  startPerfLog(rt.mainWindow);
 
   // Refresh the public tracker list in the background (non-blocking — torrents
   // added before it resolves just use the curated fallback).
@@ -144,7 +150,7 @@ app.whenReady().then(async () => {
   setInterval(() => {
     if (!rt.mainWindow || rt.mainWindow.isDestroyed()) return;
 
-    const state = [...active.values()].map(({ torrent, fileState, port, speedHistory, playback, resumePos, resumeDuration, meta, casting, episodeContext }) => {
+    const state = [...active.values()].map(({ torrent, fileState, port, speedHistory, playback, resumePos, resumeDuration, meta, casting, subVtt, castSubsOn, episodeContext, downloadAll }) => {
       speedHistory.push(torrent.downloadSpeed);
       if (speedHistory.length > 30) speedHistory.shift();
 
@@ -152,12 +158,15 @@ app.whenReady().then(async () => {
       // file.downloaded / torrent.progress walk every piece of the file — read once per tick.
       const fileDownloaded = file ? file.downloaded : 0;
       const fileProgress = file && file.length > 0 ? fileDownloaded / file.length : torrent.progress;
+      // Whole-season mode: the card tracks the entire pack, not just the streamed episode.
+      const pack = !!downloadAll;
       return {
         id: torrent.infoHash,
         name: file ? file.name : torrent.name,
-        size: file ? file.length : 0,
-        downloaded: fileDownloaded,
-        progress: fileProgress,
+        size: pack ? torrent.length : (file ? file.length : 0),
+        downloaded: pack ? torrent.downloaded : fileDownloaded,
+        progress: pack ? torrent.progress : fileProgress,
+        downloadAll: pack,
         downloadSpeed: torrent.downloadSpeed,
         uploadSpeed: torrent.uploadSpeed,
         numPeers: torrent.numPeers,
@@ -174,6 +183,7 @@ app.whenReady().then(async () => {
         meta: meta || null,
         queuePos: rt.queueOrder.indexOf(torrent.infoHash),
         casting: casting || null,
+        castSubs: casting && subVtt ? (castSubsOn ? 'on' : 'off') : null,
         episodeContext: episodeContext || null,
       };
     });
@@ -208,9 +218,9 @@ app.whenReady().then(async () => {
     applyThrottle(settings);
     const { torrents, queueOrder: savedQueue } = loadSession();
     rt.queueOrder = savedQueue;
-    for (const { magnet, resumePos, episodeContext } of torrents) {
+    for (const { magnet, resumePos, episodeContext, downloadAll } of torrents) {
       try {
-        const result = await addTorrentInternal(magnet, magnet, settings.downloadDir, resumePos, episodeContext || null);
+        const result = await addTorrentInternal(magnet, magnet, settings.downloadDir, resumePos, episodeContext || null, !!downloadAll);
         if (result.name) {
           fetchMetaFromCinemeta(result.name).then(meta => {
             const entry = active.get(result.id);

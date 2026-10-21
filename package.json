@@ -1,6 +1,6 @@
 {
   "name": "torrent-player",
-  "version": "1.12.0",
+  "version": "1.13.0",
   "description": "Stream torrents via an external player",
   "type": "module",
   "main": "src/main.js",
@@ -17,6 +17,8 @@
   "dependencies": {
     "chromecasts": "^1.10.2",
     "dlnacasts": "^0.1.0",
+    "ffmpeg-static": "^5.3.0",
+    "matroska-subtitles": "^3.3.2",
     "webtorrent": "^3.0.21"
   },
   "devDependencies": {

@@ -27,7 +27,7 @@ The interface is **inspired by Popcorn Time** — a poster wall you browse by Mo
 - **Smart queue** — download one at a time, drag to reorder
 - **Stuck-download recovery** — when a torrent finds no peers, switch to another release (series/anime) or retry the search in one click; warns when disk space is low
 - **Library** — media grid with posters, ratings and titles for everything you've watched (metadata via Cinemeta, no API key)
-- **Cast** — stream to Chromecast or DLNA/UPnP devices on your local network
+- **Cast** — stream to Chromecast or DLNA/UPnP devices on your local network. Subtitles (embedded in the MKV, shipped with the torrent, or from OpenSubtitles) are sent as a track you can toggle from the app; audio the receiver can't decode (E-AC-3, AC-3, DTS) is converted to AAC on the fly with a bundled ffmpeg
 - **Bandwidth limits** — optional max download / upload speed
 - **Languages** — English & French
 - **Auto-update** — download and install new versions from inside the app, in one click

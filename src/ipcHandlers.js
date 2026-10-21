@@ -5,6 +5,7 @@
 
 import { app, ipcMain, dialog, shell } from 'electron';
 import fs from 'fs';
+import path from 'path';
 import { active, rt } from './runtime.js';
 import { getSettings, saveSettings } from './settings.js';
 import { detect } from './playerDetector.js';
@@ -12,13 +13,16 @@ import { addEntry, loadHistory, removeEntry, updateEntry } from './history.js';
 import { loadFollows, addFollow, removeFollow, updateFollow } from './follows.js';
 import { markEpisode, getSeriesProgress } from './series-progress.js';
 import { fetchMetaFromCinemeta, fetchSeriesEpisodes } from './metadata.js';
-import { discoverDevices, castMedia, getLocalIP } from './chromecast.js';
-import { discoverDlnaDevices, castDlna } from './dlna.js';
+import { discoverDevices, castMedia, stopCast, setSubtitles, getLocalIP, resolveHostIPv4 } from './chromecast.js';
+import { needsAudioTranscode } from './transcode.js';
+import { discoverDlnaDevices, castDlna, stopDlna } from './dlna.js';
 import {
   addTorrentInternal, applyQueueRules, saveSession, switchEpisodeFile,
-  findSubtitle, focusFile, applyThrottle,
+  findSubtitle, focusFile, applyThrottle, mimeFor,
 } from './torrentManager.js';
 import { grabFollowedEpisode, checkFollows } from './watchProgress.js';
+import { ensureSubtitle } from './playback.js';
+import { srtToVtt, mkvSubtitleVtt } from './subtitles.js';
 
 // Warn (don't block) when free disk space is below the torrent's total size.
 // Metadata is resolved by now, so torrent.length is known.
@@ -35,6 +39,31 @@ async function checkDiskSpace(id, downloadDir) {
       return free < need ? { free, need } : null;
     } catch {}
   }
+  return null;
+}
+
+// Subtitle for the casted file as WebVTT text, or null. Sources, in order: a
+// .srt/.vtt shipped in the torrent, a text track embedded in the (fully
+// downloaded) MKV, then the OpenSubtitles auto-fetch. Chromecast can't read
+// ASS/SSA/SUB files or bitmap tracks (PGS/VobSub).
+async function loadSubtitleVtt(entry) {
+  try {
+    const settings = getSettings(app.getPath('userData'));
+    const sub = entry.fileState.subtitle;
+    if (sub && /\.(srt|vtt)$/i.test(sub.name)) {
+      const subPath = path.join(entry.torrent.path, sub.path);
+      if (fs.existsSync(subPath)) return srtToVtt(fs.readFileSync(subPath));
+    }
+    const file = entry.fileState.file;
+    if (/\.mkv$/i.test(file.name) && file.progress === 1) {
+      const vtt = await mkvSubtitleVtt(path.join(entry.torrent.path, file.path), settings.subtitleLanguage);
+      if (vtt) return vtt;
+    }
+    if (!sub) {
+      const fetched = await ensureSubtitle(entry, settings);
+      if (fetched && fs.existsSync(fetched)) return srtToVtt(fs.readFileSync(fetched));
+    }
+  } catch {}
   return null;
 }
 
@@ -133,7 +162,19 @@ export function registerAppIpc() {
     if (!file) throw new Error('Fichier introuvable');
     entry.fileState.file = file;
     entry.fileState.subtitle = findSubtitle(entry.torrent.files, file);
-    focusFile(entry.torrent, file);
+    focusFile(entry.torrent, file, entry.downloadAll);
+    return true;
+  });
+
+  // "Download the whole season": keep every file of the pack downloading, the
+  // currently selected episode first. Idempotent; persisted so a restart/retry
+  // doesn't silently narrow the download back to one episode.
+  ipcMain.handle('torrent:downloadAll', (_, id) => {
+    const entry = active.get(id);
+    if (!entry) throw new Error('Torrent introuvable');
+    entry.downloadAll = true;
+    focusFile(entry.torrent, entry.fileState.file, true);
+    saveSession();
     return true;
   });
 
@@ -197,6 +238,7 @@ export function registerAppIpc() {
     if (!magnet) throw new Error('Pas de magnet à relancer');
     const episodeContext = entry.episodeContext || null;
     const resumePos = entry.resumePos || null;
+    const downloadAll = !!entry.downloadAll;
     const settings = getSettings(app.getPath('userData'));
 
     entry.playback?.socket?.destroy();
@@ -205,7 +247,7 @@ export function registerAppIpc() {
     await new Promise(res => entry.torrent.destroy({}, () => res()));
     active.delete(id);
 
-    const result = await addTorrentInternal(magnet, magnet, settings.downloadDir, resumePos, episodeContext);
+    const result = await addTorrentInternal(magnet, magnet, settings.downloadDir, resumePos, episodeContext, downloadAll);
     applyQueueRules();
     saveSession();
     if (result.name) {
@@ -291,10 +333,37 @@ export function registerAppIpc() {
     const entry = active.get(id);
     if (!entry) throw new Error('Torrent introuvable');
     await ensureLanReachable(entry);
-    const url = `http://${getLocalIP(host)}:${entry.port}/${entry.streamToken}`;
-    if (deviceType === 'dlna') await castDlna(host, url);
-    else await castMedia(host, url);
+    const base = `http://${getLocalIP(await resolveHostIPv4(host))}:${entry.port}/${entry.streamToken}`;
+    // Receivers stay silent on audio they can't decode (E-AC-3, DTS…): convert it on the fly.
+    const convert = await needsAudioTranscode(`http://127.0.0.1:${entry.port}/`);
+    const url = convert ? `${base}/t.mp4` : base;
+    const type = convert ? 'video/mp4' : mimeFor(entry.fileState.file.name);
+    if (deviceType === 'dlna') await castDlna(host, url, type);
+    else {
+      entry.subVtt = await loadSubtitleVtt(entry);
+      entry.castSubsOn = !!entry.subVtt;
+      await castMedia(host, url, type, entry.subVtt ? `${base}/sub.vtt` : null);
+    }
     entry.casting = host;
+    entry.castType = deviceType;
+    return true;
+  });
+
+  ipcMain.handle('cast:subtitles', async (_, id, on) => {
+    const entry = active.get(id);
+    if (!entry?.casting || !entry.subVtt || entry.castType === 'dlna') return false;
+    entry.castSubsOn = !!on;
+    await setSubtitles(entry.casting, !!on);
+    return true;
+  });
+
+  ipcMain.handle('cast:stop', async (_, id) => {
+    const entry = active.get(id);
+    if (!entry || !entry.casting) return false;
+    const host = entry.casting;
+    entry.casting = null;
+    if (entry.castType === 'dlna') await stopDlna(host);
+    else await stopCast(host);
     return true;
   });
 

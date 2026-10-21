@@ -7,7 +7,10 @@
 
 import WebTorrent from 'webtorrent';
 
-export const client = new WebTorrent();
+// uTP disabled: its UDP bind throws an uncaught EACCES in the main process on
+// some Windows setups (reserved port ranges / another instance); TCP is enough.
+export const client = new WebTorrent({ utp: false });
+client.on('error', err => console.error('[webtorrent]', err.message));
 
 // Map<infoHash, { torrent, fileState, server, port, magnet, sockets, host,
 //   streamToken, speedHistory, playback, resumePos, resumeDuration, queuePaused,

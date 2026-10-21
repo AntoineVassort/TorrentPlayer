@@ -30,9 +30,10 @@ async function openCastPicker(id) {
         item.className = 'file-item';
         item.innerHTML = `<span class="file-item-name">📺 ${esc(d.name)}</span><span class="file-item-size">${esc(d.host)}</span>`;
         item.addEventListener('click', async () => {
+          const targetId = castTargetId;
           closeCastModal();
           try {
-            await window.api.castToDevice(castTargetId, d.host, d.type);
+            await window.api.castToDevice(targetId, d.host, d.type);
             toast(t('cast.started', { name: d.name }));
           } catch (err) {
             toast(err.message, true);

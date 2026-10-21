@@ -11,6 +11,7 @@ import crypto from 'crypto';
 import { client, active, rt } from './runtime.js';
 import { getSettings } from './settings.js';
 import { persistWatchProgress } from './watchProgress.js';
+import { pipeTranscoded } from './transcode.js';
 
 const VIDEO_EXTENSIONS    = ['.mp4', '.mkv', '.avi', '.mov', '.webm', '.m4v', '.ts', '.flv'];
 const SUBTITLE_EXTENSIONS = ['.srt', '.ass', '.ssa', '.vtt', '.sub'];
@@ -32,7 +33,7 @@ const MIME_TYPES = {
   '.flv': 'video/x-flv',
 };
 
-function mimeFor(name) {
+export function mimeFor(name) {
   return MIME_TYPES[path.extname(name).toLowerCase()] || 'video/mp4';
 }
 
@@ -99,16 +100,22 @@ export function matchesEpisode(name, season, episode) {
   return patterns.some(p => p.test(name));
 }
 
-// Restrict a torrent's download to a single file. On a multi-file torrent
-// (season pack) WebTorrent selects every file by default, so the episode we
-// actually stream competes for bandwidth with the rest of the pack. Deselecting
-// the others concentrates peers on the chosen episode so it buffers fast.
-export function focusFile(torrent, file) {
+// Steer a multi-file torrent (season pack) toward one file. WebTorrent starts
+// with the WHOLE torrent selected as a single piece range, and per-file
+// deselect() only removes an exact matching range — so it never touched that
+// default selection: every file kept downloading at equal priority and the
+// episode being streamed got no preference. Drop the whole-torrent range first,
+// then select explicitly. `all` keeps the other files downloading (whole-season
+// mode) at a lower priority than the focused episode.
+export function focusFile(torrent, file, all = false) {
   try {
+    torrent.deselect(0, torrent.pieces.length - 1);
     for (const f of torrent.files) {
-      if (f !== file) { try { f.deselect(); } catch {} }
+      if (f === file) continue;
+      try { f.deselect(); } catch {}
+      if (all) { try { f.select(0); } catch {} }
     }
-    file.select();
+    file.select(1);
   } catch {}
 }
 
@@ -155,7 +162,7 @@ export function switchEpisodeFile(entry, epCtx) {
   entry.resumeDuration = null;
   entry.playback = null;
   entry.episodeContext = epCtx;
-  focusFile(entry.torrent, match);
+  focusFile(entry.torrent, match, entry.downloadAll);
   return true;
 }
 
@@ -225,13 +232,14 @@ export function loadSession() {
 }
 
 export function saveSession() {
-  const torrents = [...active.values()].map(({ torrent, magnet, resumePos, episodeContext }) => ({
+  const torrents = [...active.values()].map(({ torrent, magnet, resumePos, episodeContext, downloadAll }) => ({
     magnet: magnet || torrent.magnetURI,
     name: torrent.name,
     resumePos: resumePos || null,
     // Persist the episode so a restored season pack re-selects the right file
     // instead of falling back to the largest one.
     episodeContext: episodeContext || null,
+    downloadAll: !!downloadAll,
   }));
   fs.writeFileSync(sessionPath(), JSON.stringify({ torrents, queueOrder: rt.queueOrder }, null, 2));
 }
@@ -270,7 +278,7 @@ function pipeFileStream(stream, res) {
   stream.pipe(res);
 }
 
-export function addTorrentInternal(torrentId, magnet, downloadDir, resumePos = null, episodeContext = null) {
+export function addTorrentInternal(torrentId, magnet, downloadDir, resumePos = null, episodeContext = null, downloadAll = false) {
   return new Promise((resolve, reject) => {
     const opts = { announce: activeTrackers };
     if (downloadDir) opts.path = downloadDir;
@@ -294,7 +302,11 @@ export function addTorrentInternal(torrentId, magnet, downloadDir, resumePos = n
       // Default to the largest video file. But when an episode was requested
       // (season pack from "Watch Now"), pick the file that matches SxxExx so we
       // stream the RIGHT episode instead of the biggest one.
-      let selectedIndex = videoFiles[0].index;
+      // No episode requested: on a multi-file pack the largest file is an
+      // arbitrary episode, so start from the first one in name order instead.
+      let selectedIndex = videoFiles.length > 1
+        ? [...videoFiles].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))[0].index
+        : videoFiles[0].index;
       let episodeMatched = false;
       if (episodeContext && episodeContext.season != null && episodeContext.episode != null) {
         const match = videoFiles.find(vf => matchesEpisode(vf.name, episodeContext.season, episodeContext.episode));
@@ -307,7 +319,7 @@ export function addTorrentInternal(torrentId, magnet, downloadDir, resumePos = n
       // Focus the download on the chosen file. Without this a season pack
       // downloads all episodes with no priority, so the picked episode's pieces
       // trickle in "randomly" and playback never reaches the 5% ready threshold.
-      focusFile(torrent, file);
+      focusFile(torrent, file, downloadAll);
 
       // Random token gating LAN access. Loopback requests (the local player) are
       // always allowed; once the server is rebound to 0.0.0.0 for casting, any
@@ -318,9 +330,31 @@ export function addTorrentInternal(torrentId, magnet, downloadDir, resumePos = n
       const server = http.createServer((req, res) => {
         const remote = req.socket.remoteAddress || '';
         const isLoopback = remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1';
-        if (!isLoopback) {
-          const reqPath = (req.url || '/').split('?')[0].replace(/^\/+/, '');
-          if (reqPath !== streamToken) { res.writeHead(403); res.end(); return; }
+        const [seg, sub] = (req.url || '/').split('?')[0].replace(/^\/+/, '').split('/');
+        if (!isLoopback && seg !== streamToken) { res.writeHead(403); res.end(); return; }
+
+        // Chromecast fetches media + text tracks cross-origin, so it needs CORS. Only
+        // sent to remote (non-loopback) requests so local web pages can't read the stream.
+        const cors = isLoopback ? {} : {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Headers': 'Range',
+          'Access-Control-Expose-Headers': 'Content-Range, Content-Length, Accept-Ranges',
+        };
+        if (req.method === 'OPTIONS') { res.writeHead(204, cors); res.end(); return; }
+
+        if (sub === 'sub.vtt') {
+          const vtt = active.get(torrent.infoHash)?.subVtt;
+          if (!vtt) { res.writeHead(404, cors); res.end(); return; }
+          res.writeHead(200, { ...cors, 'Content-Type': 'text/vtt; charset=utf-8', 'Content-Length': Buffer.byteLength(vtt) });
+          res.end(vtt);
+          return;
+        }
+
+        // Same media with the audio converted to AAC, for receivers that can't decode it.
+        if (sub === 't.mp4') {
+          if (req.method === 'HEAD') { res.writeHead(200, { ...cors, 'Content-Type': 'video/mp4' }); res.end(); return; }
+          pipeTranscoded(`http://127.0.0.1:${server.address().port}/`, res, cors);
+          return;
         }
         const f = fileState.file;
         const total = f.length;
@@ -328,13 +362,14 @@ export function addTorrentInternal(torrentId, magnet, downloadDir, resumePos = n
         const range = parseRange(req.headers['range'], total);
 
         if (range === INVALID_RANGE) {
-          res.writeHead(416, { 'Content-Range': `bytes */${total}`, 'Content-Type': contentType });
+          res.writeHead(416, { ...cors, 'Content-Range': `bytes */${total}`, 'Content-Type': contentType });
           res.end();
           return;
         }
         if (range) {
           const { start, end } = range;
           res.writeHead(206, {
+            ...cors,
             'Content-Range': `bytes ${start}-${end}/${total}`,
             'Accept-Ranges': 'bytes',
             'Content-Length': end - start + 1,
@@ -342,7 +377,7 @@ export function addTorrentInternal(torrentId, magnet, downloadDir, resumePos = n
           });
           pipeFileStream(f.createReadStream({ start, end }), res);
         } else {
-          res.writeHead(200, { 'Content-Length': total, 'Content-Type': contentType, 'Accept-Ranges': 'bytes' });
+          res.writeHead(200, { ...cors, 'Content-Length': total, 'Content-Type': contentType, 'Accept-Ranges': 'bytes' });
           pipeFileStream(f.createReadStream(), res);
         }
       });
@@ -364,6 +399,7 @@ export function addTorrentInternal(torrentId, magnet, downloadDir, resumePos = n
             speedHistory: [], playback: null, resumePos,
             queuePaused: false, meta: null, casting: null,
             episodeContext: episodeContext || null,
+            downloadAll,
           });
           saveSession();
 

@@ -4,6 +4,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('api', {
   addTorrent:        (src, resumePos, episodeContext) => ipcRenderer.invoke('torrent:add', src, resumePos, episodeContext),
   changeFile:        (id, idx)    => ipcRenderer.invoke('torrent:changeFile', id, idx),
+  downloadAll:       (id)         => ipcRenderer.invoke('torrent:downloadAll', id),
   playTorrent:       (id)         => ipcRenderer.invoke('torrent:play', id),
   playLocal:         (id)         => ipcRenderer.invoke('torrent:playLocal', id),
   stopSeed:          (id)         => ipcRenderer.invoke('torrent:stopSeed', id),
@@ -20,6 +21,8 @@ contextBridge.exposeInMainWorld('api', {
   followGrab:        (imdbId)     => ipcRenderer.invoke('follow:grab', imdbId),
   onNewEpisode:      (cb)         => ipcRenderer.on('follow:newEpisode', (_, data) => cb(data)),
   discoverDevices:   ()               => ipcRenderer.invoke('cast:discover'),
+  stopCast:          (id) => ipcRenderer.invoke('cast:stop', id),
+  castSubtitles:     (id, on) => ipcRenderer.invoke('cast:subtitles', id, on),
   castToDevice:      (id, host, type) => ipcRenderer.invoke('cast:play', id, host, type),
   seriesEpisodes:    (imdbId, tvmazeId) => ipcRenderer.invoke('series:episodes', imdbId, tvmazeId),
   seriesProgress:    (imdbId)       => ipcRenderer.invoke('series:progress', imdbId),

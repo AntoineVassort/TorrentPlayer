@@ -1,3 +1,83 @@
+import fs from 'fs';
+import { SubtitleParser } from 'matroska-subtitles';
+
+// Matroska stores languages as ISO 639-2 (3 letters) and omits the tag when it is
+// the default, "eng". Settings use 2-letter codes.
+const LANG3 = {
+  en: ['eng'], fr: ['fre', 'fra'], es: ['spa'], de: ['ger', 'deu'], it: ['ita'],
+  pt: ['por'], nl: ['dut', 'nld'], ru: ['rus'], ja: ['jpn'], ko: ['kor'], zh: ['chi', 'zho'],
+};
+
+function pickTrack(tracks, wantLang) {
+  const isSdh = (t) => /sdh|hearing|forced|commentary/i.test(t.name || '');
+  const langOf = (t) => t.language || 'eng';
+  const codes = LANG3[wantLang] || [];
+  const byLang = tracks.filter((t) => codes.includes(langOf(t)));
+  const pool = byLang.length ? byLang : tracks;
+  return pool.find((t) => !isSdh(t)) || pool[0];
+}
+
+const vttTime = (ms) => {
+  const p = (n, w = 2) => String(Math.floor(n)).padStart(w, '0');
+  return `${p(ms / 3600000)}:${p((ms / 60000) % 60)}:${p((ms / 1000) % 60)}.${p(ms % 1000, 3)}`;
+};
+
+// Extract one embedded text subtitle track (SubRip/ASS) from a fully downloaded
+// MKV and return it as WebVTT, or null. The parser throws on the file's trailing
+// padding, so on error we keep whatever cues were already read.
+export function mkvSubtitleVtt(filePath, wantLang) {
+  return new Promise((resolve) => {
+    const parser = new SubtitleParser();
+    const tracks = [];
+    const cues = new Map();
+    parser.once('tracks', (list) => {
+      for (const t of list) {
+        if (t.type !== 'utf8' && t.type !== 'ass') continue; // bitmap tracks (PGS/VobSub) can't be converted
+        tracks.push(t);
+        cues.set(t.number, []);
+      }
+    });
+    parser.on('subtitle', (s, n) => cues.get(n)?.push(s));
+
+    const input = fs.createReadStream(filePath);
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      input.destroy();
+      const track = tracks.length ? pickTrack(tracks, wantLang) : null;
+      const list = track ? cues.get(track.number) : [];
+      if (!list.length) return resolve(null);
+      const clean = (s) => {
+        let text = s.text.replace(/\r/g, '');
+        if (track.type === 'ass') text = text.replace(/\{[^}]*\}/g, '').replace(/\\N/gi, '\n');
+        return text.replace(/\n\s*\n/g, '\n').trim(); // a blank line would end the VTT cue
+      };
+      const body = list
+        .sort((a, b) => a.time - b.time)
+        .filter((s) => clean(s))
+        .map((s) => `${vttTime(s.time)} --> ${vttTime(s.time + s.duration)}\n${clean(s)}`)
+        .join('\n\n');
+      resolve(`WEBVTT\n\n${body}\n`);
+    };
+    parser.on('error', finish);
+    parser.on('finish', finish);
+    input.on('error', finish);
+    input.pipe(parser);
+  });
+}
+
+// SubRip -> WebVTT for Chromecast text tracks (it only accepts WebVTT).
+// Accepts a Buffer; falls back to windows-1252 when the bytes aren't valid UTF-8.
+export function srtToVtt(buf) {
+  let text;
+  try { text = new TextDecoder('utf-8', { fatal: true }).decode(buf); }
+  catch { text = new TextDecoder('windows-1252').decode(buf); }
+  text = text.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').trim();
+  if (text.startsWith('WEBVTT')) return text + '\n';
+  return 'WEBVTT\n\n' + text.replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2') + '\n';
+}
+
 // OpenSubtitles REST API v1 — https://opensubtitles.stoplight.io/
 // Requires a free Api-Key (configured by the user in settings).
 

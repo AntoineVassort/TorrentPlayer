@@ -165,7 +165,7 @@ function endVlcPlayback(id) {
 
 // --- Subtitles (OpenSubtitles auto-fetch) ---
 
-async function ensureSubtitle(entry, settings) {
+export async function ensureSubtitle(entry, settings) {
   if (entry.fileState.subtitle) return null;            // embedded .srt present
   if (entry.fetchedSubPath && fs.existsSync(entry.fetchedSubPath)) return entry.fetchedSubPath;
 
