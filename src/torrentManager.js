@@ -264,9 +264,12 @@ export function applyNetworkSettings(settings) {
   client.maxConns = mc > 0 ? Math.min(mc, 500) : 55;
   const mb = parseInt(settings.aheadWindowMB, 10);
   tuning.windowBytes = (mb > 0 ? Math.min(Math.max(mb, 64), 8192) : 512) * 1024 * 1024;
-  tuning.strategy = settings.strategy === 'rarest' ? 'rarest' : 'sequential';
   tuning.seedRatio = Math.max(0, Number(settings.seedRatioLimit) || 0);
-  for (const t of client.torrents) t.strategy = tuning.strategy;
+  // NB: the piece strategy is deliberately NOT user-tunable. WebTorrent's 'rarest'
+  // rescans the whole selected window for every request attempt (O(window²) per
+  // peer): measured on a 130 MB torrent it kept the main thread 93 % busy with
+  // 5-6 s freezes and ~1.5 MB/s, vs 42 % busy and 14 MB/s with the default
+  // 'sequential'. Any `strategy` left in settings.json by v1.14.0 is ignored.
 }
 
 // Stop seeding for real. torrent.pause() only flips a flag: it blocks NEW
@@ -344,7 +347,7 @@ function pipeFileStream(stream, res) {
 
 export function addTorrentInternal(torrentId, magnet, downloadDir, resumePos = null, episodeContext = null, downloadAll = false) {
   return new Promise((resolve, reject) => {
-    const opts = { announce: activeTrackers, strategy: tuning.strategy };
+    const opts = { announce: activeTrackers };
     if (downloadDir) opts.path = downloadDir;
 
     const pending = client.add(torrentId, opts, (torrent) => {

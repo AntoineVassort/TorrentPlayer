@@ -19,7 +19,6 @@ export function getDefaults(userDataPath) {
     maxDownload: null,
     maxUpload: null,
     maxConns: 55,            // per torrent (WebTorrent default)
-    strategy: 'sequential',  // 'sequential' (streaming) | 'rarest' (swarm health)
     aheadWindowMB: 512,      // how far ahead of the playhead the download is scheduled
     seedRatioLimit: 0,       // stop seeding at this upload/size ratio; 0 = never
     // Applied at startup only (WebTorrent reads them when the client is created):

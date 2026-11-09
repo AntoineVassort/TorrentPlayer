@@ -369,7 +369,6 @@ function populateSettings() {
     document.getElementById('max-upload').value = n.maxUpload || '';
     document.getElementById('max-conns').value = n.maxConns ?? 55;
     document.getElementById('seed-ratio').value = n.seedRatioLimit ?? 0;
-    document.getElementById('strategy').value = n.strategy || 'sequential';
     document.getElementById('ahead-window').value = n.aheadWindowMB ?? 512;
     document.getElementById('net-dht').checked = n.dht !== false;
     document.getElementById('net-lsd').checked = n.lsd !== false;
@@ -428,7 +427,6 @@ async function saveSettings() {
   const maxUl = parseInt(document.getElementById('max-upload').value) || 0;
   const maxConns = Math.min(Math.max(parseInt(document.getElementById('max-conns').value) || 55, 1), 500);
   const seedRatioLimit = Math.max(parseFloat(document.getElementById('seed-ratio').value) || 0, 0);
-  const strategy = document.getElementById('strategy').value === 'rarest' ? 'rarest' : 'sequential';
   const aheadWindowMB = Math.min(Math.max(parseInt(document.getElementById('ahead-window').value) || 512, 64), 8192);
   const portRaw = parseInt(document.getElementById('net-port').value) || 0;
   const torrentPort = portRaw >= 1024 && portRaw <= 65535 ? portRaw : 0;
@@ -449,7 +447,6 @@ async function saveSettings() {
     maxUpload: maxUl || null,
     maxConns,
     seedRatioLimit,
-    strategy,
     aheadWindowMB,
     dht: document.getElementById('net-dht').checked,
     lsd: document.getElementById('net-lsd').checked,

@@ -28,7 +28,7 @@ export const client = new WebTorrent({
 });
 
 // Live-tunable values (set by applyNetworkSettings in torrentManager).
-export const tuning = { windowBytes: 512 * 1024 * 1024, strategy: 'sequential', seedRatio: 0 };
+export const tuning = { windowBytes: 512 * 1024 * 1024, seedRatio: 0 };
 client.on('error', err => console.error('[webtorrent]', err.message));
 
 // Map<infoHash, { torrent, fileState, server, port, magnet, sockets, host,

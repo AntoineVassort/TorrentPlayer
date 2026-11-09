@@ -280,15 +280,6 @@
                   <div class="setting-control"><div class="input-unit"><input id="max-conns" type="number" min="1" max="500" placeholder="55"><span class="unit" data-i18n="label.perTorrent">per torrent</span></div></div>
                 </div>
                 <div class="setting">
-                  <div class="setting-text"><div class="setting-label" data-i18n="label.strategy">Download order</div><div class="setting-desc" data-i18n="desc.strategy">Sequential fills the start of the file first so playback starts fast</div></div>
-                  <div class="setting-control">
-                    <select id="strategy">
-                      <option value="sequential" data-i18n="strategy.sequential">Sequential (best for streaming)</option>
-                      <option value="rarest" data-i18n="strategy.rarest">Rarest first (best for swarm health)</option>
-                    </select>
-                  </div>
-                </div>
-                <div class="setting">
                   <div class="setting-text"><div class="setting-label" data-i18n="label.aheadWindow">Read-ahead</div><div class="setting-desc" data-i18n="desc.ahead">How far ahead of the start of the missing data pieces are requested</div></div>
                   <div class="setting-control"><div class="input-unit"><input id="ahead-window" type="number" min="64" max="8192" step="64" placeholder="512"><span class="unit">MB</span></div></div>
                 </div>

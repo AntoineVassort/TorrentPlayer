@@ -28,7 +28,7 @@ The interface is **inspired by Popcorn Time** — a poster wall you browse by Mo
 - **Stuck-download recovery** — when a torrent finds no peers, switch to another release (series/anime) or retry the search in one click; warns when disk space is low
 - **Library** — media grid with posters, ratings and titles for everything you've watched (metadata via Cinemeta, no API key)
 - **Cast** — stream to Chromecast or DLNA/UPnP devices on your local network. Subtitles (embedded in the MKV, shipped with the torrent, or from OpenSubtitles) are sent as a track you can toggle from the app; audio the receiver can't decode (E-AC-3, AC-3, DTS) is converted to AAC on the fly with a bundled ffmpeg
-- **Network & performance settings** — a dedicated Settings page: max download / upload speed, max connections per torrent, download order (sequential for streaming, or rarest-first), read-ahead window, stop-seeding ratio, and DHT / local discovery / UPnP-NAT-PMP / web seeds / listening port. Sensible defaults, one-click "restore defaults"
+- **Network & performance settings** — a dedicated Settings page: max download / upload speed, max connections per torrent, read-ahead window, stop-seeding ratio, and DHT / local discovery / UPnP-NAT-PMP / web seeds / listening port. Sensible defaults, one-click "restore defaults"
 - **Big-file friendly** — the download is scheduled in a sliding window ahead of the missing data, so 20 GB+ torrents no longer saturate the app's main thread
 - **Languages** — English & French
 - **Auto-update** — download and install new versions from inside the app, in one click
