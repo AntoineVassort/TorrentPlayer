@@ -6,7 +6,7 @@
 import { app, ipcMain, dialog, shell } from 'electron';
 import fs from 'fs';
 import path from 'path';
-import { active, rt } from './runtime.js';
+import { active, rt, client, verifying } from './runtime.js';
 import { getSettings, saveSettings } from './settings.js';
 import { detect } from './playerDetector.js';
 import { addEntry, loadHistory, removeEntry, updateEntry } from './history.js';
@@ -194,7 +194,16 @@ export function registerAppIpc() {
 
   ipcMain.handle('torrent:remove', (_, id) => {
     const entry = active.get(id);
-    if (!entry) return;
+    if (!entry) {
+      // Still verifying its files (not in `active` yet): cancel it. Files on disk are kept.
+      if (verifying.has(id)) {
+        verifying.delete(id);
+        try { client.remove(id); } catch {}
+        rt.queueOrder = rt.queueOrder.filter(i => i !== id);
+        return true;
+      }
+      return;
+    }
 
     const magnet = entry.magnet || entry.torrent.magnetURI;
     if (magnet) {

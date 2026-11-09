@@ -24,6 +24,9 @@ export const client = new WebTorrent({
   natUpnp: startup.natTraversal !== false,
   natPmp: startup.natTraversal !== false,
   webSeeds: startup.webSeeds !== false,
+  // 1 = protocol encryption with plaintext fallback (WebTorrent default), 0 = plaintext only.
+  // Each encrypted connection runs a synchronous Diffie-Hellman exchange on the main thread.
+  secure: startup.encryption === false ? 0 : 1,
   torrentPort: port >= 1024 && port <= 65535 ? port : 0,
 });
 
@@ -35,6 +38,10 @@ client.on('error', err => console.error('[webtorrent]', err.message));
 //   streamToken, speedHistory, playback, resumePos, resumeDuration, queuePaused,
 //   meta, casting, episodeContext, fetchedSubPath, _vlcTimer }>
 export const active = new Map();
+
+// Map<infoHash, { torrent, name, magnet, checked, total }> — torrents whose metadata is in but
+// whose existing files are still being hash-verified. They join `active` at WebTorrent's 'ready'.
+export const verifying = new Map();
 
 export const rt = {
   mainWindow: null,

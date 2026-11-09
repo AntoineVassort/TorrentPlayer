@@ -26,6 +26,7 @@ export function getDefaults(userDataPath) {
     lsd: true,
     natTraversal: true,      // UPnP + NAT-PMP port mapping
     webSeeds: true,
+    encryption: true,        // BitTorrent protocol encryption (MSE) with plaintext fallback
     torrentPort: 0,          // 0 = random
   };
 }

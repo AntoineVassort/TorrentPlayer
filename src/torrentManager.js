@@ -8,7 +8,7 @@ import http from 'http';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
-import { client, active, rt, tuning } from './runtime.js';
+import { client, active, rt, tuning, verifying } from './runtime.js';
 import { getSettings } from './settings.js';
 import { persistWatchProgress } from './watchProgress.js';
 import { pipeTranscoded } from './transcode.js';
@@ -105,19 +105,15 @@ export function matchesEpisode(name, season, episode) {
 // deselect() only removes an exact matching range — so it never touched that
 // default selection: every file kept downloading at equal priority and the
 // episode being streamed got no preference. Drop the whole-torrent range first,
-// then select explicitly. `all` keeps the other files downloading (whole-season
-// mode) at a lower priority than the focused episode.
+// then schedule explicitly. `all` (whole-season mode) additionally slides a window
+// over the entire pack, so the other episodes keep downloading too.
 export function focusFile(torrent, file, all = false) {
   try {
     torrent.deselect(0, torrent.pieces.length - 1);
-    for (const f of torrent.files) {
-      if (f === file) continue;
-      try { f.deselect(); } catch {}
-      if (all) { try { f.select(0); } catch {} }
-    }
     torrent._tpWin = null;
-    if (all) file.select(1);
-    else slideWindow(torrent, file);
+    torrent._tpWinAll = null;
+    slideWindow(torrent, file);
+    if (all) slidePack(torrent);
   } catch {}
 }
 
@@ -126,19 +122,23 @@ export function focusFile(torrent, file, all = false) {
 // process at 100% of a core (profiled: ~80% in validateWire + bitfield.get). Select
 // only a window ahead of the first missing piece and slide it as the download
 // advances; the file still downloads fully, just in bounded chunks.
-export function slideWindow(torrent, file) {
+//
+// `key` names the bookkeeping slot on the torrent so the focused-file window and the
+// whole-pack window (season mode) can coexist. Note select() MERGES overlapping or
+// adjacent ranges (the merged range takes the highest priority), which is why we only
+// ever trim the already-downloaded prefix and never an arbitrary old range.
+function slideRange(torrent, key, first, last, priority) {
   const pl = torrent.pieceLength;
-  if (!pl || !torrent.bitfield || file.length === 0 || torrent.destroyed) return;
-  const first = Math.floor(file.offset / pl);
-  const last = Math.floor((file.offset + file.length - 1) / pl);
-  const w = torrent._tpWin || (torrent._tpWin = { cursor: first, sel: null });
-  // Self-heal: if WebTorrent no longer holds any selection (it drops completed or
-  // deselected ranges), our bookkeeping is stale and nothing would be requested.
+  if (!pl || !torrent.bitfield || last < first || torrent.destroyed) return;
+  const w = torrent[key] || (torrent[key] = { cursor: first, sel: null });
+  // Self-heal: WebTorrent drops completed or deselected ranges, so our bookkeeping
+  // can go stale and nothing would be requested. A window is only "held" while some
+  // non-stream selection still covers its cursor.
   if (w.sel && torrent._selections) {
     let held = false;
     for (let i = 0; i < torrent._selections.length; i++) {
       const s = torrent._selections.get(i);
-      if (!s.isStreamSelection && s.to >= w.cursor) { held = true; break; }
+      if (!s.isStreamSelection && s.from <= w.cursor && s.to >= w.cursor) { held = true; break; }
     }
     if (!held) w.sel = null;
   }
@@ -154,12 +154,22 @@ export function slideWindow(torrent, file) {
   if (w.sel && p - w.sel[0] < span / 4) return;
   const to = Math.min(last, p + span);
   const old = w.sel;
-  // select() MERGES overlapping ranges, so the old and new windows become one
-  // [old.from, to] range. Only trim the already-downloaded prefix [old.from, p-1];
-  // deselecting the whole old window would carve out still-missing pieces.
-  torrent.select(p, to, 1);
+  torrent.select(p, to, priority);
   w.sel = [p, to];
   if (old && p - 1 >= old[0]) { try { torrent.deselect(old[0], p - 1); } catch {} }
+}
+
+// Window over one file (the one being streamed). Highest priority.
+export function slideWindow(torrent, file) {
+  const pl = torrent.pieceLength;
+  if (!pl || file.length === 0) return;
+  slideRange(torrent, '_tpWin', Math.floor(file.offset / pl), Math.floor((file.offset + file.length - 1) / pl), 1);
+}
+
+// Window over the whole pack (whole-season mode): every episode keeps downloading,
+// at a lower priority than the focused file's window.
+export function slidePack(torrent) {
+  slideRange(torrent, '_tpWinAll', 0, torrent.pieces.length - 1, 0);
 }
 
 // Head buffer required before playback is offered: 5% of the file, capped.
@@ -496,6 +506,22 @@ export function addTorrentInternal(torrentId, magnet, downloadDir, resumePos = n
       try { client.remove(pending); } catch {}
       reject(new Error('Aucun peer trouvé (timeout 60s). Essayez un autre stream.'));
     }, 60000);
+
+    // The callback above only fires at WebTorrent's 'ready', i.e. AFTER it has hash-verified
+    // whatever is already on disk — minutes for a 20 GB resume. Two consequences handled here:
+    //  - receiving the metadata proves peers exist, so the 60 s "no peer" timer must stop;
+    //    otherwise it kills a torrent that is merely verifying;
+    //  - the main loop needs to see the verification progress to show it on the card.
+    pending.once('metadata', () => {
+      clearTimeout(timer);
+      const v = { torrent: pending, name: pending.name, magnet, checked: 0, total: pending.pieces.length };
+      verifying.set(pending.infoHash, v);
+      const verify = pending._verifyPiece.bind(pending);
+      pending._verifyPiece = (i, cb) => verify(i, (err, ok) => { v.checked++; cb(err, ok); });
+    });
+    const forget = () => verifying.delete(pending.infoHash);
+    pending.once('ready', forget);
+    pending.once('close', () => { forget(); clearTimeout(timer); reject(new Error('cancelled')); });
   });
 }
 

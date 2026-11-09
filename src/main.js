@@ -5,13 +5,13 @@
 import { app, BrowserWindow, Menu, Tray, nativeImage, clipboard } from 'electron';
 import { fileURLToPath } from 'url';
 import path from 'path';
-import { client, active, rt, tuning } from './runtime.js';
+import { client, active, rt, tuning, verifying } from './runtime.js';
 import { getSettings, saveSettings } from './settings.js';
 import { registerMetadataIpc, fetchMetaFromCinemeta } from './metadata.js';
 import { registerUpdaterIpc } from './updater.js';
 import {
   refreshTrackers, applyNetworkSettings, pauseSeeding, loadSession, saveSession,
-  applyQueueRules, addTorrentInternal, deleteTorrentFiles, isReadyToPlay, slideWindow,
+  applyQueueRules, addTorrentInternal, deleteTorrentFiles, isReadyToPlay, slideWindow, slidePack,
 } from './torrentManager.js';
 import { registerPlaybackIpc } from './playback.js';
 import { checkFollows } from './watchProgress.js';
@@ -155,7 +155,10 @@ app.whenReady().then(async () => {
       if (speedHistory.length > 30) speedHistory.shift();
 
       const file = fileState.file;
-      if (file && !downloadAll && !torrent.done) slideWindow(torrent, file);
+      if (file && !torrent.done) {
+        slideWindow(torrent, file);
+        if (downloadAll) slidePack(torrent);   // whole-season mode: keep the other episodes moving too
+      }
       // Seed-ratio limit: stop once, so a manual "resume seeding" afterwards sticks.
       if (tuning.seedRatio > 0 && torrent.done && !torrent.paused && !torrent._tpRatioStopped
           && torrent.length > 0 && torrent.uploaded / torrent.length >= tuning.seedRatio) {
@@ -194,6 +197,22 @@ app.whenReady().then(async () => {
         episodeContext: episodeContext || null,
       };
     });
+
+    // Torrents still verifying existing files on disk are not in `active` yet (WebTorrent only
+    // calls back at 'ready'). Surface them so the user sees what is happening while a big
+    // torrent "warms up" after a restart, instead of an empty list.
+    for (const v of verifying.values()) {
+      if (active.has(v.torrent.infoHash)) continue;
+      state.push({
+        id: v.torrent.infoHash, name: v.torrent.name || v.name, size: v.torrent.length || 0,
+        verifying: true, verifyProgress: v.total > 0 ? Math.min(v.checked / v.total, 1) : 0,
+        downloaded: 0, progress: 0, downloadAll: false, downloadSpeed: 0, uploadSpeed: 0,
+        numPeers: v.torrent.numPeers || 0, done: false, paused: false, ready: false,
+        timeRemaining: null, hasSubtitle: false, speedHistory: [], playback: null,
+        resumePos: null, resumeDuration: null, port: null, meta: null,
+        queuePos: rt.queueOrder.indexOf(v.torrent.infoHash), casting: null, castSubs: null, episodeContext: null,
+      });
+    }
 
     rt.mainWindow.webContents.send('torrent:state', state);
 
