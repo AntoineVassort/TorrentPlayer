@@ -28,7 +28,7 @@ async function openCastPicker(id) {
       for (const d of devices) {
         const item = document.createElement('button');
         item.className = 'file-item';
-        item.innerHTML = `<span class="file-item-name">📺 ${esc(d.name)}</span><span class="file-item-size">${esc(d.host)}</span>`;
+        item.innerHTML = `<span class="file-item-name">${ICONS.tv} ${esc(d.name)}</span><span class="file-item-size">${esc(d.host)}</span>`;
         item.addEventListener('click', async () => {
           const targetId = castTargetId;
           closeCastModal();
@@ -36,7 +36,7 @@ async function openCastPicker(id) {
             await window.api.castToDevice(targetId, d.host, d.type);
             toast(t('cast.started', { name: d.name }));
           } catch (err) {
-            toast(err.message, true);
+            toast(friendlyError(err), true);
           }
         });
         deviceList.appendChild(item);

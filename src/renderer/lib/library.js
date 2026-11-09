@@ -77,7 +77,7 @@ function createLibCard(item, onRemove) {
     ? `<img class="lib-poster" src="${esc(item.poster)}" alt="">`
     : `<div class="lib-no-poster"></div>`;
 
-  const ratingBadge = item.rating ? `<div class="lib-rating">⭐ ${esc(String(item.rating))}</div>` : '';
+  const ratingBadge = item.rating ? `<div class="lib-rating">★ ${esc(String(item.rating))}</div>` : '';
   const activeBadge = item.type === 'active' ? `<div class="lib-active-badge">✓</div>` : '';
   const yearLine    = item.year ? `<div class="lib-info-year">${esc(String(item.year))}</div>` : '';
 
@@ -165,7 +165,7 @@ function createLibCard(item, onRemove) {
       if (meta.rating && !card.querySelector('.lib-rating')) {
         const r = document.createElement('div');
         r.className = 'lib-rating';
-        r.textContent = `⭐ ${meta.rating}`;
+        r.textContent = `★ ${meta.rating}`;
         card.appendChild(r);
       }
     }).catch(() => {});
@@ -288,7 +288,7 @@ function createFollowCard(f) {
       const r = await window.api.followGrab(f.imdbId);
       toast(t('toast.added', { name: r.name }));
       renderFollows();
-    } catch (err) { toast(err.message, true); }
+    } catch (err) { toast(friendlyError(err), true); }
   });
   card.querySelector('.btn-lib-remove').addEventListener('click', async e => {
     e.stopPropagation();
@@ -374,6 +374,7 @@ function populateSettings() {
     document.getElementById('net-lsd').checked = n.lsd !== false;
     document.getElementById('net-nat').checked = n.natTraversal !== false;
     document.getElementById('net-webseeds').checked = n.webSeeds !== false;
+    document.getElementById('net-encryption').checked = n.encryption !== false;
     document.getElementById('net-port').value = n.torrentPort || 0;
   };
   fillNet(settings);
@@ -452,6 +453,7 @@ async function saveSettings() {
     lsd: document.getElementById('net-lsd').checked,
     natTraversal: document.getElementById('net-nat').checked,
     webSeeds: document.getElementById('net-webseeds').checked,
+    encryption: document.getElementById('net-encryption').checked,
     torrentPort,
     language,
     autoPlayNext,

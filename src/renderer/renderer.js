@@ -382,8 +382,10 @@ async function doAdd(source, resumePos = null, episodeContext = null) {
   } catch (err) {
     pendingTorrents.delete(pid);
     renderList();
-    const msg = err.message === 'already_downloading' ? t('toast.alreadyActive') : err.message;
-    toast(msg, err.message !== 'already_downloading');
+    // User removed the card while it was still verifying: not an error worth a toast.
+    if (/cancelled/.test(err.message)) return;
+    const dup = /already_downloading/.test(err.message);
+    toast(dup ? t('toast.alreadyActive') : friendlyError(err), !dup);
   }
 }
 
@@ -395,7 +397,9 @@ function renderList() {
   if (document.getElementById('search-results').classList.contains('expanded')) return;
   const list = document.getElementById('torrent-list');
   const empty = document.getElementById('empty-state');
-  const allItems = [...torrents, ...pendingTorrents.values()];
+  // A torrent verifying its files already has its own card: hide the generic 'connecting' placeholders.
+  const verifyingNow = torrents.some(x => x.verifying);
+  const allItems = [...torrents, ...(verifyingNow ? [] : pendingTorrents.values())];
   empty.classList.toggle('hidden', allItems.length > 0);
 
   for (const card of [...list.querySelectorAll('.card')]) {
@@ -453,7 +457,7 @@ function createCard(torrent) {
         <button class="btn-retry hidden"></button>
         <button class="btn-files hidden" title="${t('btn.chooseFile')}">${ICONS.files}</button>
         <button class="btn-play">${torrent.connecting ? t('card.buffering') : t('card.play')}</button>
-        <button class="btn-local hidden">${t('card.playLocal')}</button>
+        <button class="btn-local btn-ico hidden">${ICONS.folder}<span>${t('card.playLocal')}</span></button>
         <button class="btn-cast hidden" title="Cast">${ICONS.cast}</button>
         <button class="btn-seed hidden">⏸ Seeding</button>
         <button class="btn-remove" title="Remove">${ICONS.remove}</button>
@@ -543,6 +547,30 @@ function updateCard(card, torrent) {
     poster.classList.add('hidden');
   }
 
+  // Verifying existing files on disk (big resume): show real progress instead of a dead card.
+  const playBtnV = card.querySelector('.btn-play');
+  if (torrent.verifying) {
+    const vp = Math.round((torrent.verifyProgress || 0) * 100);
+    card.classList.add('verifying');
+    card.classList.remove('stalled');
+    const fillV = card.querySelector('.progress-fill');
+    fillV.style.width = `${vp}%`;
+    fillV.classList.remove('done');
+    fillV.classList.add('verify');
+    card.querySelector('.pct').textContent = t('card.verifying', { pct: vp });
+    for (const c of ['downloaded', 'eta', 'dl', 'peers']) card.querySelector('.' + c).textContent = '';
+    card.querySelector('.peers').classList.remove('peers-stalled');
+    card.querySelector('.graph').innerHTML = '';
+    card.querySelector('.btn-retry').classList.add('hidden');
+    playBtnV.textContent = t('card.verifyingShort');
+    playBtnV.classList.add('buffering');
+    playBtnV.disabled = true;
+    return;   // the rest of updateCard assumes a live, downloading torrent
+  }
+  card.classList.remove('verifying');
+  card.querySelector('.progress-fill').classList.remove('verify');
+  playBtnV.disabled = false;
+
   const pct = (torrent.progress * 100).toFixed(1);
   card.querySelector('.progress-fill').style.width = `${pct}%`;
   card.querySelector('.progress-fill').classList.toggle('done', torrent.done);
@@ -617,7 +645,7 @@ function updateCard(card, torrent) {
   if (torrent.casting) {
     if (playbackBar.dataset.cast !== torrent.casting) {
       playbackBar.dataset.cast = torrent.casting;
-      playbackBar.innerHTML = `<span>${esc(t('cast.inProgress', { name: torrent.casting }))}</span> <button class="btn-cast-subs hidden"></button> <button class="btn-cast-stop">${esc(t('cast.stop'))}</button>`;
+      playbackBar.innerHTML = `<span class="cast-label">${ICONS.tv}<span>${esc(t('cast.inProgress', { name: torrent.casting }))}</span></span> <button class="btn-cast-subs hidden"></button> <button class="btn-cast-stop">${esc(t('cast.stop'))}</button>`;
       playbackBar.querySelector('.btn-cast-stop').addEventListener('click', () => window.api.stopCast(torrent.id));
       const subsBtn = playbackBar.querySelector('.btn-cast-subs');
       subsBtn.addEventListener('click', () => window.api.castSubtitles(torrent.id, subsBtn.dataset.state !== 'on'));
@@ -625,7 +653,7 @@ function updateCard(card, torrent) {
     const subsBtn = playbackBar.querySelector('.btn-cast-subs');
     subsBtn.classList.toggle('hidden', !torrent.castSubs);
     subsBtn.dataset.state = torrent.castSubs || '';
-    subsBtn.textContent = t(torrent.castSubs === 'on' ? 'cast.subsOn' : 'cast.subsOff');
+    subsBtn.innerHTML = ICONS.chat + '<span>' + esc(t(torrent.castSubs === 'on' ? 'cast.subsOn' : 'cast.subsOff')) + '</span>';
     playbackBar.classList.remove('hidden');
   } else if (torrent.playback) {
     delete playbackBar.dataset.cast;
@@ -654,23 +682,23 @@ function updateCard(card, torrent) {
 
 async function play(id) {
   try { await window.api.playTorrent(id); }
-  catch (err) { toast(err.message, true); }
+  catch (err) { toast(friendlyError(err), true); }
 }
 
 async function playLocal(id) {
   try { await window.api.playLocal(id); }
-  catch (err) { toast(err.message, true); }
+  catch (err) { toast(friendlyError(err), true); }
 }
 
 async function stopSeed(id) {
   try { await window.api.stopSeed(id); }
-  catch (err) { toast(err.message, true); }
+  catch (err) { toast(friendlyError(err), true); }
 }
 
 async function remove(id, card) {
   card.classList.add('removing');
   try { await window.api.removeTorrent(id); }
-  catch (err) { card.classList.remove('removing'); toast(err.message, true); }
+  catch (err) { card.classList.remove('removing'); toast(friendlyError(err), true); }
 }
 
 // --- File picker ---
@@ -686,7 +714,7 @@ function openFilePicker(torrentId, files) {
     try {
       await window.api.downloadAll(torrentId);
       toast(t('toast.downloadAll', { n: files.length }));
-    } catch (err) { toast(err.message, true); }
+    } catch (err) { toast(friendlyError(err), true); }
     closeFilePicker();
   });
   list.appendChild(all);
@@ -698,7 +726,7 @@ function openFilePicker(torrentId, files) {
       try {
         await window.api.changeFile(torrentId, f.index);
         toast(t('toast.file', { name: f.name }));
-      } catch (err) { toast(err.message, true); }
+      } catch (err) { toast(friendlyError(err), true); }
       closeFilePicker();
     });
     list.appendChild(item);
@@ -718,7 +746,7 @@ async function retryTorrent(id) {
   try {
     await window.api.retryTorrent(id);
     toast(t('toast.retrying'));
-  } catch (err) { toast(err.message, true); }
+  } catch (err) { toast(friendlyError(err), true); }
 }
 
 // Show alternate Torrentio releases for the same episode; picking one drops the

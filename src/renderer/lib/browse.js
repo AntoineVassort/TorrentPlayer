@@ -491,7 +491,7 @@ async function attachFollowButton(host, { imdbId, title, poster }) {
       following = !following;
       paint();
       toast(following ? t('toast.followed', { name: title }) : t('toast.unfollowed', { name: title }));
-    } catch (err) { toast(err.message, true); }
+    } catch (err) { toast(friendlyError(err), true); }
     btn.disabled = false;
   });
 }

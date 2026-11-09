@@ -20,9 +20,9 @@
   --red-glow:    rgba(229,9,20,0.28);
   --red-dim:     rgba(229,9,20,0.12);
 
-  --indigo:      #6366f1;
-  --indigo-h:    #818cf8;
-  --indigo-dim:  rgba(99,102,241,0.15);
+  --indigo:      #4f9fd6;
+  --indigo-h:    #6fb4e3;
+  --indigo-dim:  rgba(79,159,214,0.15);
 
   --text:        #eef1f4;
   --muted:       #707a85;
@@ -35,8 +35,8 @@
   --ease:        0.18s ease;
 
   /* legacy compat */
-  --accent:      #6366f1;
-  --accent-h:    #818cf8;
+  --accent:      #4f9fd6;
+  --accent-h:    #6fb4e3;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -118,12 +118,14 @@ header button {
 header button:hover { color: var(--text); background: var(--border); }
 
 /* ── Popcorn Time nav bar (main view) ────────────────── */
+#main-view { container: mainv / inline-size; }
+
 #pt-nav {
   display: flex;
   align-items: center;
   gap: 18px;
   height: 52px;
-  padding: 0 150px 0 18px;            /* right pad clears window controls */
+  padding: 0 128px 0 18px;            /* right pad clears window controls */
   background: linear-gradient(180deg, #1d2228 0%, #191d22 100%);
   border-bottom: 1px solid rgba(0,0,0,0.4);
   box-shadow: 0 1px 0 rgba(255,255,255,0.03) inset, 0 2px 12px rgba(0,0,0,0.35);
@@ -355,7 +357,7 @@ header button:hover { color: var(--text); background: var(--border); }
   font-family: inherit;
 }
 .filter-btn:hover { color: var(--muted-h); border-color: var(--border-h); }
-.filter-btn.active { background: var(--indigo-dim); border-color: rgba(99,102,241,0.5); color: var(--indigo-h); }
+.filter-btn.active { background: var(--indigo-dim); border-color: rgba(79,159,214,0.5); color: var(--indigo-h); }
 
 /* ── Inputs ──────────────────────────────────────────── */
 #magnet-input,
@@ -519,7 +521,7 @@ header button:hover { color: var(--text); background: var(--border); }
   align-items: center;
   gap: 10px;
   background: var(--indigo-dim);
-  border: 1px solid rgba(99,102,241,0.3);
+  border: 1px solid rgba(79,159,214,0.3);
   border-radius: var(--r);
   padding: 9px 14px;
   font-size: 12px;
@@ -535,8 +537,8 @@ header button:hover { color: var(--text); background: var(--border); }
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
-  border: 1px solid rgba(99,102,241,0.4);
-  background: rgba(99,102,241,0.2);
+  border: 1px solid rgba(79,159,214,0.4);
+  background: rgba(79,159,214,0.2);
   color: var(--text);
   transition: all var(--ease);
   font-family: inherit;
@@ -545,7 +547,7 @@ header button:hover { color: var(--text); background: var(--border); }
 #update-dismiss-btn { background: transparent !important; border-color: transparent !important; color: var(--muted) !important; }
 #update-dismiss-btn:hover { color: var(--text) !important; background: var(--border) !important; }
 #update-banner button:disabled { opacity: 0.5; cursor: default; }
-#update-progress { width: 120px; height: 6px; border-radius: 3px; background: rgba(99,102,241,0.2); overflow: hidden; flex-shrink: 0; }
+#update-progress { width: 120px; height: 6px; border-radius: 3px; background: rgba(79,159,214,0.2); overflow: hidden; flex-shrink: 0; }
 #update-progress.hidden { display: none; }
 #update-progress-bar { height: 100%; width: 0%; background: var(--indigo); transition: width var(--ease); }
 
@@ -610,3 +612,17 @@ header button:hover { color: var(--text); background: var(--border); }
 #empty-state .muted { font-size: 12px; opacity: 0.6; font-weight: 400; }
 #empty-state.drag-over { background: rgba(229,9,20,0.04); border: 2px dashed rgba(229,9,20,0.3); border-radius: 12px; }
 #empty-state.drag-over .empty-icon { opacity: 0.6; }
+
+/* ── Top nav: adapts to its own width ─────────────────── */
+.pt-tab, .pt-filter-label, .pt-select { white-space: nowrap; }
+.pt-tabs, .pt-filters, .pt-icons { flex-shrink: 0; }
+@container mainv (width < 760px) {
+  #pt-nav { gap: 12px; }
+  .pt-filter-label { display: none; }                    /* the selects are self-explanatory */
+}
+@container mainv (width < 640px) {
+  #pt-nav { gap: 8px; padding-left: 12px; }
+  .pt-tab { font-size: 13px; }
+  .pt-icons button { width: 30px; }
+  .pt-select-wrap:has(#pt-sort) { display: none; }                       /* minimum window only: keep the icons reachable */
+}

@@ -316,7 +316,7 @@
 .player-install-btn {
   flex: 1;
   background: var(--indigo-dim);
-  border: 1px solid rgba(99,102,241,0.4);
+  border: 1px solid rgba(79,159,214,0.4);
   border-radius: 8px;
   color: var(--indigo-h);
   padding: 9px;
@@ -326,7 +326,7 @@
   transition: all var(--ease);
   font-family: inherit;
 }
-.player-install-btn:hover { background: rgba(99,102,241,0.22); border-color: var(--indigo); }
+.player-install-btn:hover { background: rgba(79,159,214,0.22); border-color: var(--indigo); }
 .player-setup-actions { display: flex; gap: 8px; justify-content: flex-end; padding-top: 4px; border-top: 1px solid var(--border); margin-top: 2px; }
 .player-setup-actions button { flex: 0 0 auto; }
 
@@ -440,8 +440,8 @@
 .torrentio-debrid-note {
   margin-top: 10px;
   padding: 10px 12px;
-  background: rgba(99,102,241,0.08);
-  border: 1px solid rgba(99,102,241,0.2);
+  background: rgba(79,159,214,0.08);
+  border: 1px solid rgba(79,159,214,0.2);
   border-radius: 7px;
   font-size: 11px;
   color: var(--muted-h);

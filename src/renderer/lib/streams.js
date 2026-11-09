@@ -54,7 +54,7 @@ function renderTorrentioTitles(results, type) {
     const meta = [item.year, item.rating ? `★ ${item.rating}` : null].filter(Boolean).join(' · ');
     card.innerHTML = `
       <div class="torrentio-poster">
-        ${item.poster ? `<img src="${esc(item.poster)}" alt="" loading="lazy">` : '<div class="torrentio-poster-empty">🎬</div>'}
+        ${item.poster ? `<img src="${esc(item.poster)}" alt="" loading="lazy">` : '<div class="torrentio-poster-empty">' + ICONS.film + '</div>'}
       </div>
       <div class="torrentio-card-info">
         <div class="torrentio-card-title" title="${esc(item.title)}">${esc(item.title)}</div>
@@ -210,7 +210,7 @@ function renderStreamRows(container, streams, episodeContext = null, watchMeta =
     row.innerHTML = `
       ${s.quality ? `<span class="search-quality ${qualityClass}">${esc(s.quality)}</span>` : ''}
       <span class="torrentio-stream-name" title="${esc(s.fileName)}">${esc(s.fileName)}</span>
-      ${s.debrid ? '<span class="torrentio-debrid-badge">🔒 Debrid</span>' : ''}
+      ${s.debrid ? '<span class="torrentio-debrid-badge">${ICONS.lock} Debrid</span>' : ''}
       ${!s.debrid && s.seeders != null ? `<span class="search-seeds ${seedsClass(s.seeders)}">↑ ${Number(s.seeders)}</span>` : ''}
       ${s.size ? `<span class="torrentio-stream-size">${esc(s.size)}</span>` : ''}
     `;
@@ -221,7 +221,7 @@ function renderStreamRows(container, streams, episodeContext = null, watchMeta =
     container.appendChild(row);
   }
   if (debridOnly.length && !playable.length) {
-    container.insertAdjacentHTML('beforeend', `<div class="torrentio-debrid-note">🔒 Ces streams nécessitent un compte Debrid (RealDebrid, AllDebrid…) — configure ton URL Torrentio dans les paramètres.</div>`);
+    container.insertAdjacentHTML('beforeend', `<div class="torrentio-debrid-note">${ICONS.lock} Ces streams nécessitent un compte Debrid (RealDebrid, AllDebrid…) — configure ton URL Torrentio dans les paramètres.</div>`);
   }
 }
 

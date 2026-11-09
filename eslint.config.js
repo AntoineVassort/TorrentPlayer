@@ -77,6 +77,7 @@ const rendererShared = {
     fmt: "writable",
     fmtDate: "writable",
     fmtETA: "writable",
+    friendlyError: "writable",
     fmtSize: "writable",
     fmtTime: "writable",
     getLang: "writable",

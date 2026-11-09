@@ -78,7 +78,7 @@
   flex-shrink: 0;
   letter-spacing: 0.3px;
 }
-.queue-badge.queue-badge-first { background: var(--indigo-dim); color: var(--indigo-h); border: 1px solid rgba(99,102,241,0.3); }
+.queue-badge.queue-badge-first { background: var(--indigo-dim); color: var(--indigo-h); border: 1px solid rgba(79,159,214,0.3); }
 
 /* Progress */
 .progress-bar {
@@ -102,6 +102,10 @@
   background-size: 200% 100%;
   animation: shimmer 2.2s linear infinite;
 }
+/* Verifying existing files on disk: steady steel-blue, no animation (cheap to render) */
+.progress-fill.verify { background: var(--pt); animation: none; }
+.card.verifying .card-name { opacity: 0.9; }
+
 .progress-fill.done {
   background: var(--success);
   animation: none;
@@ -125,7 +129,7 @@
   padding: 2px 5px;
   border-radius: 3px;
   letter-spacing: 0.5px;
-  border: 1px solid rgba(99,102,241,0.3);
+  border: 1px solid rgba(79,159,214,0.3);
 }
 
 .graph { display: flex; align-items: center; margin-left: auto; opacity: 0.5; }
@@ -137,7 +141,24 @@
   font-weight: 500;
   letter-spacing: 0.2px;
 }
+.playback-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .playback-bar.hidden { display: none; }
+.playback-bar button {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--muted-h);
+  padding: 4px 10px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--ease), border-color var(--ease), color var(--ease);
+}
+.playback-bar button:hover { background: var(--card-h); border-color: var(--border-h); color: var(--text); }
+.playback-bar .btn-cast-stop:hover { border-color: var(--red); color: var(--red-h); }
+.playback-bar .btn-cast-subs.hidden { display: none; }
 
 /* Card actions */
 .card-actions {
@@ -232,8 +253,8 @@
   transition: all var(--ease);
   font-family: inherit;
 }
-.btn-seed.active { color: var(--indigo-h); border-color: rgba(99,102,241,0.45); background: var(--indigo-dim); }
-.btn-seed:hover { color: var(--indigo-h); border-color: rgba(99,102,241,0.45); }
+.btn-seed.active { color: var(--indigo-h); border-color: rgba(79,159,214,0.45); background: var(--indigo-dim); }
+.btn-seed:hover { color: var(--indigo-h); border-color: rgba(79,159,214,0.45); }
 
 .btn-retry {
   background: rgba(245,158,11,0.08);
@@ -731,7 +752,7 @@ section h2 {
 #toast.show { opacity: 1; transform: translateY(0) scale(1); }
 
 /* ── Settings v2: side nav + panels ───────────────────── */
-#settings-body { flex: 1; display: flex; min-height: 0; }
+#settings-body { flex: 1; display: flex; min-height: 0; container: sbody / inline-size; }
 #settings-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 
 #settings-nav {
@@ -855,10 +876,24 @@ section h2 {
   border-top: 1px solid var(--border);
 }
 
-@media (max-width: 760px) {
+@container sbody (width < 760px) {
   #settings-nav { width: 56px; padding: 12px 6px; }
   .snav-btn span:not(.snav-ico) { display: none; }
   .snav-btn { justify-content: center; padding: 10px 0; }
   #settings-content { padding: 16px; }
   .setting { flex-wrap: wrap; }
 }
+
+/* Downloads list: keep cards a readable width on large windows */
+#torrent-list > .card { width: 100%; max-width: 1040px; align-self: center; }
+
+/* Inline SVG icon next to a label (replaces colour emoji) */
+.btn-ico { display: inline-flex; align-items: center; gap: 7px; }
+.btn-ico svg { flex-shrink: 0; }
+.modal-title { display: inline-flex; align-items: center; gap: 9px; }
+.playback-bar button { display: inline-flex; align-items: center; gap: 6px; }
+.cast-label { display: inline-flex; align-items: center; gap: 6px; }
+.file-item-name svg { vertical-align: -2px; margin-right: 4px; opacity: 0.85; }
+.empty-icon svg { opacity: 0.35; }
+.torrentio-poster-empty svg { opacity: 0.4; }
+.torrentio-debrid-badge svg, .torrentio-debrid-note svg { vertical-align: -2px; margin-right: 3px; }
