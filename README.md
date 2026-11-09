@@ -46,6 +46,8 @@ The interface is **inspired by Popcorn Time** — a poster wall you browse by Mo
 3. Extract anywhere
 4. Run `TorrentPlayer.exe`
 
+macOS (Intel / Apple Silicon) and Linux builds are attached to each release as `TorrentPlayer-macOS-x64.zip`, `TorrentPlayer-macOS-arm64.zip` and `TorrentPlayer-Linux-x64.zip` (less tested than Windows). See the [CHANGELOG](CHANGELOG.md) for what changed in each version.
+
 On first launch the app shows a short disclaimer, then helps you pick a video player (it auto-detects VLC, mpv, MPC-HC, MPC-BE, PotPlayer). No further configuration required.
 
 ---
