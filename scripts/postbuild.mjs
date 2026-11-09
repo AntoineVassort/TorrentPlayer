@@ -1,4 +1,4 @@
-import { cpSync, existsSync, readdirSync } from 'fs';
+import { cpSync, existsSync, readdirSync, rmSync, statSync } from 'fs';
 import { join } from 'path';
 import { platform } from 'os';
 
@@ -22,4 +22,19 @@ for (const platformDir of platformDirs) {
       console.log(`Restored dist/ for ${pkg} (${platformDir})`);
     }
   }
+}
+
+// Chromium ships ~55 locale packs (~47 MB). The app has its own EN/FR i18n, and Chromium falls back
+// to en-US for anything else, so keep only en-US (required fallback) and fr. Windows/Linux only:
+// macOS keeps its locales in .lproj folders inside the bundle.
+const KEEP_LOCALES = new Set(['en-US.pak', 'fr.pak']);
+for (const platformDir of platformDirs.filter(d => d.startsWith('win32') || d.startsWith('linux'))) {
+  const dir = `dist/TorrentPlayer-${platformDir}/locales`;
+  if (!existsSync(dir)) continue;
+  let freed = 0, removed = 0;
+  for (const name of readdirSync(dir)) {
+    if (!name.endsWith('.pak') || KEEP_LOCALES.has(name)) continue;
+    freed += statSync(join(dir, name)).size; rmSync(join(dir, name)); removed++;
+  }
+  console.log(`Pruned ${removed} Chromium locales (${(freed / 1048576).toFixed(1)} MB) from ${platformDir}`);
 }

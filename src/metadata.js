@@ -11,10 +11,25 @@ import { getSettings } from './settings.js';
 // Posters change rarely — cache the resolved data-URI on disk so Discover/Library
 // don't re-fetch every image each session.
 let posterCacheDir = null;
+
+// The cache never shrank (≈1000 files / 40 MB after a few months). Drop entries untouched for 90
+// days, once per session, well after startup; anything still needed is simply fetched again.
+function prunePosterCache(dir) {
+  const cutoff = Date.now() - 90 * 24 * 3600 * 1000;
+  fs.readdir(dir, (err, names) => {
+    if (err) return;
+    for (const n of names) {
+      const f = path.join(dir, n);
+      fs.stat(f, (e, st) => { if (!e && st.isFile() && st.mtimeMs < cutoff) fs.unlink(f, () => {}); });
+    }
+  });
+}
+
 function posterCachePath(url) {
   if (!posterCacheDir) {
     posterCacheDir = path.join(app.getPath('userData'), 'poster-cache');
     try { fs.mkdirSync(posterCacheDir, { recursive: true }); } catch {}
+    setTimeout(() => prunePosterCache(posterCacheDir), 60000).unref();
   }
   return path.join(posterCacheDir, crypto.createHash('sha1').update(url).digest('hex'));
 }
