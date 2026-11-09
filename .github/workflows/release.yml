@@ -118,13 +118,25 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           pattern: build-*
           merge-multiple: true
 
+      # Release notes = the matching section of CHANGELOG.md (curated by hand);
+      # GitHub's auto-generated "Full Changelog" link is appended below it. If the
+      # version has no section, the notes file is empty and the release still ships.
+      - name: Extract release notes from CHANGELOG.md
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v h="## [${version}]" '/^## \[/ { f = (index($0, h) == 1); next } f' CHANGELOG.md > release-notes.md
+          echo "Notes for ${version}: $(wc -l < release-notes.md) lines"
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           files: TorrentPlayer-*.zip
+          body_path: release-notes.md
           generate_release_notes: true
