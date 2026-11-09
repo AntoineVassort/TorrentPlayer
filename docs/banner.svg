@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="300" viewBox="0 0 1280 300" role="img" aria-label="TorrentPlayer — stream torrents through your existing video player">
+  <title>TorrentPlayer — stream torrents through your existing video player</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1b1f24"/>
+      <stop offset="1" stop-color="#2a3037"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="16%" cy="0%" r="75%">
+      <stop offset="0" stop-color="#4f9fd6" stop-opacity="0.34"/>
+      <stop offset="1" stop-color="#4f9fd6" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glow2" cx="100%" cy="100%" r="55%">
+      <stop offset="0" stop-color="#e50914" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#e50914" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="bar" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#4f9fd6"/>
+      <stop offset="1" stop-color="#6fb4e3"/>
+    </linearGradient>
+    <linearGradient id="spark" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#4f9fd6" stop-opacity="0"/>
+      <stop offset="0.25" stop-color="#4f9fd6" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#6fb4e3" stop-opacity="0.9"/>
+    </linearGradient>
+    <clipPath id="round"><rect width="1280" height="300" rx="18"/></clipPath>
+  </defs>
+  <style>
+    .t { font-family: 'Outfit', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; }
+    .grow { transform-box: fill-box; transform-origin: left center; animation: grow 7s ease-in-out infinite alternate; }
+    @keyframes grow { from { transform: scaleX(0.18); } to { transform: scaleX(1); } }
+    .drift { animation: drift 9s ease-in-out infinite alternate; }
+    @keyframes drift { from { transform: translateX(0); } to { transform: translateX(-28px); } }
+  </style>
+
+  <g clip-path="url(#round)">
+    <rect width="1280" height="300" fill="url(#bg)"/>
+    <rect width="1280" height="300" fill="url(#glow)"/>
+    <rect width="1280" height="300" fill="url(#glow2)"/>
+
+    <!-- speed graph motif (like the sparkline on a download card) -->
+    <g class="drift" fill="none" stroke-linecap="round">
+      <path d="M 700 214 C 760 150 820 262 880 206 S 1000 150 1060 206 S 1180 262 1240 196 S 1320 150 1380 200"
+            stroke="url(#spark)" stroke-width="5" opacity="0.55"/>
+      <path d="M 700 232 C 760 180 820 272 880 228 S 1000 184 1060 228 S 1180 276 1240 220 S 1320 186 1380 224"
+            stroke="url(#spark)" stroke-width="3" opacity="0.28"/>
+    </g>
+
+    <!-- app icon: hexagon + play -->
+    <g transform="translate(150 142)">
+      <polygon points="0,-76 66,-38 66,38 0,76 -66,38 -66,-38" fill="#14181c" stroke="#4f9fd6" stroke-width="5" stroke-linejoin="round"/>
+      <polygon points="0,-60 52,-30 52,30 0,60 -52,30 -52,-30" fill="none" stroke="#4f9fd6" stroke-opacity="0.35" stroke-width="2" stroke-linejoin="round"/>
+      <polygon points="-15,-30 -15,30 34,0" fill="#e50914" stroke="#e50914" stroke-width="7" stroke-linejoin="round"/>
+    </g>
+
+    <!-- title -->
+    <text class="t" x="262" y="136" font-size="68" font-weight="700" fill="#eef1f4" letter-spacing="0.5">TorrentPlayer</text>
+    <text class="t" x="264" y="184" font-size="25" fill="#9aa5b1">Stream torrents through your existing video player.</text>
+
+    <!-- chips -->
+    <g class="t" font-size="15" fill="#9aa5b1" text-anchor="middle">
+      <rect x="264" y="206" width="118" height="32" rx="16" fill="#1c2025" stroke="#383f47"/>
+      <text x="323" y="227">no codecs</text>
+      <rect x="394" y="206" width="148" height="32" rx="16" fill="#1c2025" stroke="#383f47"/>
+      <text x="468" y="227">no transcoding</text>
+      <rect x="554" y="206" width="252" height="32" rx="16" fill="#1c2025" stroke="#4f9fd6" stroke-opacity="0.6"/>
+      <text x="680" y="227" fill="#6fb4e3">mpv · VLC · MPC-HC · IINA</text>
+    </g>
+
+    <!-- download progress bar along the bottom -->
+    <rect x="0" y="286" width="1280" height="14" fill="#14181c"/>
+    <rect class="grow" x="0" y="286" width="1280" height="14" fill="url(#bar)"/>
+  </g>
+  <rect x="0.5" y="0.5" width="1279" height="299" rx="17.5" fill="none" stroke="#383f47"/>
+</svg>

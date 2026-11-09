@@ -1,8 +1,21 @@
-# TorrentPlayer
+<div align="center">
 
-Stream torrents through your existing video player — no codecs, no transcoding.
+<img src="docs/banner.svg" alt="TorrentPlayer — stream torrents through your existing video player" width="100%">
 
-TorrentPlayer downloads and streams simultaneously. It serves the file over a local HTTP server with range-request support, then launches your external player (VLC, mpv, MPC-HC…) directly with the URL. Seeking, subtitles and buffering are handled natively by the player.
+<br>
+
+<a href="https://github.com/AntoineVassort/TorrentPlayer/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/AntoineVassort/TorrentPlayer?style=flat-square&color=4f9fd6&labelColor=1c2025&label=release"></a> <a href="https://github.com/AntoineVassort/TorrentPlayer/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/AntoineVassort/TorrentPlayer/ci.yml?branch=master&style=flat-square&labelColor=1c2025&label=CI"></a> <img alt="Platforms" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-383f47?style=flat-square&labelColor=1c2025"> <a href="https://github.com/AntoineVassort/TorrentPlayer/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/AntoineVassort/TorrentPlayer/total?style=flat-square&color=e50914&labelColor=1c2025&label=downloads"></a> <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/github/license/AntoineVassort/TorrentPlayer?style=flat-square&color=383f47&labelColor=1c2025"></a>
+
+
+**Pick a title, press *Watch Now* — it downloads and plays at the same time, in the player you already use.**
+
+<a href="#installation">Download</a> &nbsp;·&nbsp; <a href="#screenshots">Screenshots</a> &nbsp;·&nbsp; <a href="#highlights">Highlights</a> &nbsp;·&nbsp; <a href="#supported-players">Players</a> &nbsp;·&nbsp; <a href="CHANGELOG.md">Changelog</a>
+
+</div>
+
+<br>
+
+TorrentPlayer downloads and streams simultaneously. It serves the file over a local HTTP server with range-request support, then launches your external player (VLC, mpv, MPC-HC…) directly with the URL. Seeking, subtitles and buffering are handled natively by the player — so there are **no codecs to ship and no transcoding**.
 
 The interface is **inspired by Popcorn Time** — a poster wall you browse by Movies / TV Series / Anime, filter by genre and sort, with infinite scroll, a rich detail view (seasons, episodes, synopsis) and a clean full-screen download screen.
 
@@ -10,7 +23,52 @@ The interface is **inspired by Popcorn Time** — a poster wall you browse by Mo
 
 ---
 
-## Features
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="docs/screenshots/discover.webp"><img src="docs/screenshots/discover.webp" alt="Browse popular movies, series and anime on a poster wall"></a>
+      <br><sub><b>Browse</b> — a poster wall with genre and sort filters, and infinite scroll.</sub>
+    </td>
+    <td width="50%" valign="top">
+      <a href="docs/screenshots/library.webp"><img src="docs/screenshots/library.webp" alt="Library with followed series and Continue Watching"></a>
+      <br><sub><b>Library</b> — followed series, Continue Watching with resume progress, and everything you've watched. <i>Screenshots use generated demo artwork.</i></sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="docs/screenshots/downloads.webp"><img src="docs/screenshots/downloads.webp" alt="Download cards with progress, casting and file verification"></a>
+      <br><sub><b>Downloads</b> — live speed, resume position, casting and file-verification progress.</sub>
+    </td>
+    <td width="50%" valign="top">
+      <a href="docs/screenshots/settings.webp"><img src="docs/screenshots/settings.webp" alt="Network and performance settings page"></a>
+      <br><sub><b>Settings</b> — speed limits, connections, read-ahead and network options, with sensible defaults.</sub>
+    </td>
+  </tr>
+</table>
+
+---
+
+## Highlights
+
+<table>
+  <tr>
+    <td width="33%" valign="top"><b>⚡ Watch while it downloads</b><br>Playback starts as soon as enough is buffered. Seeking, subtitles and buffering stay in your player.</td>
+    <td width="33%" valign="top"><b>🎬 Popcorn Time–style browsing</b><br>Movies, series and anime, with genres, sorting, a detail view and a seasons / episodes layout.</td>
+    <td width="33%" valign="top"><b>📺 Cast anywhere</b><br>Chromecast and DLNA/UPnP, with subtitles and on-the-fly AAC audio for formats receivers can't decode.</td>
+  </tr>
+  <tr>
+    <td valign="top"><b>⏯️ Pick up where you left off</b><br>Continue Watching with the exact position for mpv and VLC. Follow a series and get new-episode alerts.</td>
+    <td valign="top"><b>⚙️ Tunable, with good defaults</b><br>Speed limits, connections, read-ahead, seed ratio, DHT / NAT / encryption — and one click to restore defaults.</td>
+    <td valign="top"><b>📦 Built for big files</b><br>A sliding download window and live verification progress keep 20 GB+ torrents smooth.</td>
+  </tr>
+</table>
+
+<details open>
+<summary><b>Everything it does</b></summary>
+
+<br>
 
 - **Browse** — a Popcorn Time–style poster wall of popular movies, series and anime, with **Genre** and **Sort** filters and **infinite scroll** that loads more as you go (metadata from Cinemeta & Kitsu)
 - **Detail view** — click any title for a full-screen page: backdrop, synopsis, rating, and for series a **Seasons │ Episodes │ Episode-info** layout with one-click **Watch Now**
@@ -31,24 +89,28 @@ The interface is **inspired by Popcorn Time** — a poster wall you browse by Mo
 - **Network & performance settings** — a dedicated Settings page: max download / upload speed, max connections per torrent, read-ahead window, stop-seeding ratio, and DHT / local discovery / UPnP-NAT-PMP / web seeds / protocol encryption / listening port. Sensible defaults, one-click "restore defaults"
 - **Verification progress** — when a big torrent re-checks its files after a restart, its card shows the real progress ("Verifying files… 42 %") and can be cancelled
 - **Big-file friendly** — the download is scheduled in a sliding window ahead of the missing data, so 20 GB+ torrents no longer saturate the app's main thread
-- **Keyboard shortcuts** — `Ctrl+K` (or `/`) opens the search, `Esc` goes back
+- **Keyboard shortcuts** — <kbd>Ctrl</kbd>+<kbd>K</kbd> (or <kbd>/</kbd>) opens the search, <kbd>Esc</kbd> goes back
 - **Languages** — English & French
 - **Auto-update** — download and install new versions from inside the app, in one click
 - **System tray** — closing the window minimizes to tray; tray shows live download speed
 - **Clipboard detection** — paste a magnet link and the app picks it up automatically
 
+</details>
+
 ---
 
 ## Installation
 
-**No Node.js required.**
+**No Node.js required.** Download the archive for your system, extract it anywhere and run the app:
 
-1. Go to [Releases](../../releases/latest)
+<p align="center"><a href="https://github.com/AntoineVassort/TorrentPlayer/releases/latest/download/TorrentPlayer-Windows-x64.zip"><img alt="Download for Windows" src="https://img.shields.io/badge/Windows-x64-4f9fd6?style=for-the-badge&logo=windows&logoColor=white&labelColor=1c2025"></a> <a href="https://github.com/AntoineVassort/TorrentPlayer/releases/latest/download/TorrentPlayer-macOS-arm64.zip"><img alt="Download for macOS Apple Silicon" src="https://img.shields.io/badge/macOS-Apple%20Silicon-4f9fd6?style=for-the-badge&logo=apple&logoColor=white&labelColor=1c2025"></a> <a href="https://github.com/AntoineVassort/TorrentPlayer/releases/latest/download/TorrentPlayer-macOS-x64.zip"><img alt="Download for macOS Intel" src="https://img.shields.io/badge/macOS-Intel-4f9fd6?style=for-the-badge&logo=apple&logoColor=white&labelColor=1c2025"></a> <a href="https://github.com/AntoineVassort/TorrentPlayer/releases/latest/download/TorrentPlayer-Linux-x64.zip"><img alt="Download for Linux" src="https://img.shields.io/badge/Linux-x64-4f9fd6?style=for-the-badge&logo=linux&logoColor=white&labelColor=1c2025"></a></p>
+
+1. Go to [Releases](../../releases/latest) (or use the buttons above)
 2. Download `TorrentPlayer-Windows-x64.zip`
 3. Extract anywhere
 4. Run `TorrentPlayer.exe`
 
-macOS (Intel / Apple Silicon) and Linux builds are attached to each release as `TorrentPlayer-macOS-x64.zip`, `TorrentPlayer-macOS-arm64.zip` and `TorrentPlayer-Linux-x64.zip` (less tested than Windows). See the [CHANGELOG](CHANGELOG.md) for what changed in each version.
+The macOS archives are `TorrentPlayer-macOS-x64.zip` and `TorrentPlayer-macOS-arm64.zip`, and the Linux one is `TorrentPlayer-Linux-x64.zip` (less tested than Windows). See the [CHANGELOG](CHANGELOG.md) for what changed in each version.
 
 On first launch the app shows a short disclaimer, then helps you pick a video player. It auto-detects the players installed on your machine (see below); you can also browse to any other player manually. No further configuration required.
 
@@ -82,7 +144,10 @@ If a torrent has no embedded subtitles, TorrentPlayer can fetch them automatical
 
 ---
 
-## For developers
+<details>
+<summary><b>For developers</b></summary>
+
+<br>
 
 > Node.js is bundled in the release exe — end users don't need to install anything.
 
@@ -101,6 +166,8 @@ Releases are built by GitHub Actions when a `vX.Y.Z` tag is pushed; the release 
 
 **Stack:** Electron · WebTorrent v3 · Vanilla JS (no framework) · ESM
 
+</details>
+
 ---
 
 ## Legal
@@ -112,3 +179,8 @@ TorrentPlayer is a neutral tool. It does not host, index or distribute any conte
 ## License
 
 [MIT](LICENSE)
+
+<div align="center">
+<br>
+<sub>Inspired by Popcorn Time, with ♥</sub>
+</div>
