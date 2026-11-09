@@ -40,7 +40,7 @@ jobs:
           # against Electron, so the build host's Node never reaches the artifact.
           #
           # The upstream node-datachannel macOS prebuilts are compiled on recent
-          # runners (macos-15-intel / macos-14) with no deployment-target floor, so
+          # runners (macos-15-intel / macos-15) with no deployment-target floor, so
           # they link against newer libc++ symbols (e.g. basic_ifstream VTT) absent
           # on older macOS → "Symbol not found" crash at dlopen. Build from source
           # with a low deployment target instead so it runs down to Electron 32's
@@ -52,7 +52,10 @@ jobs:
             deploymentTarget: '10.15'
             nodeVersion: '20'
             opensslRoot: /usr/local/opt/openssl@3
-          - os: macos-14
+          # macos-14 was retired by GitHub on 2026-11-02 ("configuration
+          # 'macos-14-arm64-us-default' is not supported" → job cancelled in 1 s,
+          # which skipped the whole release). macos-15 is the Apple Silicon image.
+          - os: macos-15
             script: dist:mac-arm64
             buildFromSource: 'node-datachannel'
             deploymentTarget: '11.0'
