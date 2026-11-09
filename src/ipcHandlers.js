@@ -18,7 +18,7 @@ import { needsAudioTranscode } from './transcode.js';
 import { discoverDlnaDevices, castDlna, stopDlna } from './dlna.js';
 import {
   addTorrentInternal, applyQueueRules, saveSession, switchEpisodeFile,
-  findSubtitle, focusFile, applyThrottle, mimeFor,
+  findSubtitle, focusFile, applyNetworkSettings, pauseSeeding, mimeFor,
 } from './torrentManager.js';
 import { grabFollowedEpisode, checkFollows } from './watchProgress.js';
 import { ensureSubtitle } from './playback.js';
@@ -187,15 +187,7 @@ export function registerAppIpc() {
       t._rechokeNumSlots = 10;
       t.resume();
     } else {
-      // Stop seeding for real. torrent.pause() only flips a flag: it blocks NEW
-      // connections but leaves already-connected wires open (and the rechoke loop
-      // keeps unchoking them), so upload never stops and the UI still shows active
-      // peers. Pause (rejects any reconnect, in or out), zero the rechoke slots,
-      // then destroy the open wires so peers actually disconnect (numPeers → 0).
-      // slice() because wire.destroy() removes it from t.wires mid-iteration.
-      t.pause();
-      t._rechokeNumSlots = 0;
-      t.wires.slice().forEach(w => w.destroy());
+      pauseSeeding(t);
     }
     return true;
   });
@@ -375,7 +367,7 @@ export function registerAppIpc() {
 
   ipcMain.handle('settings:save', (_, settings) => {
     saveSettings(app.getPath('userData'), settings);
-    applyThrottle(settings);
+    applyNetworkSettings(settings);
     return true;
   });
 

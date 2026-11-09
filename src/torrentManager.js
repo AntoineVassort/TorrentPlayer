@@ -8,7 +8,7 @@ import http from 'http';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
-import { client, active, rt } from './runtime.js';
+import { client, active, rt, tuning } from './runtime.js';
 import { getSettings } from './settings.js';
 import { persistWatchProgress } from './watchProgress.js';
 import { pipeTranscoded } from './transcode.js';
@@ -115,8 +115,51 @@ export function focusFile(torrent, file, all = false) {
       try { f.deselect(); } catch {}
       if (all) { try { f.select(0); } catch {} }
     }
-    file.select(1);
+    torrent._tpWin = null;
+    if (all) file.select(1);
+    else slideWindow(torrent, file);
   } catch {}
+}
+
+// WebTorrent's per-peer request loop (validateWire/_updateWire) scans EVERY piece of
+// every selected range on each update. Selecting a 20 GB file whole pinned the main
+// process at 100% of a core (profiled: ~80% in validateWire + bitfield.get). Select
+// only a window ahead of the first missing piece and slide it as the download
+// advances; the file still downloads fully, just in bounded chunks.
+export function slideWindow(torrent, file) {
+  const pl = torrent.pieceLength;
+  if (!pl || !torrent.bitfield || file.length === 0 || torrent.destroyed) return;
+  const first = Math.floor(file.offset / pl);
+  const last = Math.floor((file.offset + file.length - 1) / pl);
+  const w = torrent._tpWin || (torrent._tpWin = { cursor: first, sel: null });
+  // Self-heal: if WebTorrent no longer holds any selection (it drops completed or
+  // deselected ranges), our bookkeeping is stale and nothing would be requested.
+  if (w.sel && torrent._selections) {
+    let held = false;
+    for (let i = 0; i < torrent._selections.length; i++) {
+      const s = torrent._selections.get(i);
+      if (!s.isStreamSelection && s.to >= w.cursor) { held = true; break; }
+    }
+    if (!held) w.sel = null;
+  }
+  let p = Math.max(w.cursor, first);
+  while (p <= last && torrent.bitfield.get(p)) p++;
+  w.cursor = p;
+  if (p > last) {
+    if (w.sel) { try { torrent.deselect(w.sel[0], w.sel[1]); } catch {} w.sel = null; }
+    return;
+  }
+  const span = Math.ceil(tuning.windowBytes / pl);
+  // Keep the current window until the cursor has eaten a quarter of it (limits churn).
+  if (w.sel && p - w.sel[0] < span / 4) return;
+  const to = Math.min(last, p + span);
+  const old = w.sel;
+  // select() MERGES overlapping ranges, so the old and new windows become one
+  // [old.from, to] range. Only trim the already-downloaded prefix [old.from, p-1];
+  // deselecting the whole old window would carve out still-missing pieces.
+  torrent.select(p, to, 1);
+  w.sel = [p, to];
+  if (old && p - 1 >= old[0]) { try { torrent.deselect(old[0], p - 1); } catch {} }
 }
 
 // Head buffer required before playback is offered: 5% of the file, capped.
@@ -210,11 +253,32 @@ export async function refreshTrackers() {
   } catch {}
 }
 
-export function applyThrottle(settings) {
+// Apply every setting WebTorrent lets us change on a live client. (DHT / LSD /
+// NAT / web seeds / listen port are read once at client creation — see runtime.js.)
+export function applyNetworkSettings(settings) {
   const dl = settings.maxDownload ? settings.maxDownload * 1024 : -1;
   const ul = settings.maxUpload  ? settings.maxUpload  * 1024 : -1;
   client.throttleDownload(dl);
   client.throttleUpload(ul);
+  const mc = parseInt(settings.maxConns, 10);
+  client.maxConns = mc > 0 ? Math.min(mc, 500) : 55;
+  const mb = parseInt(settings.aheadWindowMB, 10);
+  tuning.windowBytes = (mb > 0 ? Math.min(Math.max(mb, 64), 8192) : 512) * 1024 * 1024;
+  tuning.strategy = settings.strategy === 'rarest' ? 'rarest' : 'sequential';
+  tuning.seedRatio = Math.max(0, Number(settings.seedRatioLimit) || 0);
+  for (const t of client.torrents) t.strategy = tuning.strategy;
+}
+
+// Stop seeding for real. torrent.pause() only flips a flag: it blocks NEW
+// connections but leaves already-connected wires open (and the rechoke loop keeps
+// unchoking them), so upload never stops and the UI still shows active peers.
+// Pause (rejects any reconnect, in or out), zero the rechoke slots, then destroy
+// the open wires so peers actually disconnect (numPeers → 0). slice() because
+// wire.destroy() removes it from t.wires mid-iteration.
+export function pauseSeeding(t) {
+  t.pause();
+  t._rechokeNumSlots = 0;
+  t.wires.slice().forEach(w => w.destroy());
 }
 
 // --- Session persistence ---
@@ -280,7 +344,7 @@ function pipeFileStream(stream, res) {
 
 export function addTorrentInternal(torrentId, magnet, downloadDir, resumePos = null, episodeContext = null, downloadAll = false) {
   return new Promise((resolve, reject) => {
-    const opts = { announce: activeTrackers };
+    const opts = { announce: activeTrackers, strategy: tuning.strategy };
     if (downloadDir) opts.path = downloadDir;
 
     const pending = client.add(torrentId, opts, (torrent) => {

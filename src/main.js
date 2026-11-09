@@ -5,13 +5,13 @@
 import { app, BrowserWindow, Menu, Tray, nativeImage, clipboard } from 'electron';
 import { fileURLToPath } from 'url';
 import path from 'path';
-import { client, active, rt } from './runtime.js';
+import { client, active, rt, tuning } from './runtime.js';
 import { getSettings, saveSettings } from './settings.js';
 import { registerMetadataIpc, fetchMetaFromCinemeta } from './metadata.js';
 import { registerUpdaterIpc } from './updater.js';
 import {
-  refreshTrackers, applyThrottle, loadSession, saveSession,
-  applyQueueRules, addTorrentInternal, deleteTorrentFiles, isReadyToPlay,
+  refreshTrackers, applyNetworkSettings, pauseSeeding, loadSession, saveSession,
+  applyQueueRules, addTorrentInternal, deleteTorrentFiles, isReadyToPlay, slideWindow,
 } from './torrentManager.js';
 import { registerPlaybackIpc } from './playback.js';
 import { checkFollows } from './watchProgress.js';
@@ -155,6 +155,13 @@ app.whenReady().then(async () => {
       if (speedHistory.length > 30) speedHistory.shift();
 
       const file = fileState.file;
+      if (file && !downloadAll && !torrent.done) slideWindow(torrent, file);
+      // Seed-ratio limit: stop once, so a manual "resume seeding" afterwards sticks.
+      if (tuning.seedRatio > 0 && torrent.done && !torrent.paused && !torrent._tpRatioStopped
+          && torrent.length > 0 && torrent.uploaded / torrent.length >= tuning.seedRatio) {
+        torrent._tpRatioStopped = true;
+        pauseSeeding(torrent);
+      }
       // file.downloaded / torrent.progress walk every piece of the file — read once per tick.
       const fileDownloaded = file ? file.downloaded : 0;
       const fileProgress = file && file.length > 0 ? fileDownloaded / file.length : torrent.progress;
@@ -215,7 +222,7 @@ app.whenReady().then(async () => {
   // Restore session
   rt.mainWindow.webContents.once('did-finish-load', async () => {
     const settings = getSettings(app.getPath('userData'));
-    applyThrottle(settings);
+    applyNetworkSettings(settings);
     const { torrents, queueOrder: savedQueue } = loadSession();
     rt.queueOrder = savedQueue;
     for (const { magnet, resumePos, episodeContext, downloadAll } of torrents) {

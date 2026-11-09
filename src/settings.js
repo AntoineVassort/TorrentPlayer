@@ -15,6 +15,19 @@ export function getDefaults(userDataPath) {
     autoPlayNext: true,
     autoGrabFollowed: false,
     preferredQuality: null,
+    // Network & performance. Speed limits: KB/s, null = unlimited.
+    maxDownload: null,
+    maxUpload: null,
+    maxConns: 55,            // per torrent (WebTorrent default)
+    strategy: 'sequential',  // 'sequential' (streaming) | 'rarest' (swarm health)
+    aheadWindowMB: 512,      // how far ahead of the playhead the download is scheduled
+    seedRatioLimit: 0,       // stop seeding at this upload/size ratio; 0 = never
+    // Applied at startup only (WebTorrent reads them when the client is created):
+    dht: true,
+    lsd: true,
+    natTraversal: true,      // UPnP + NAT-PMP port mapping
+    webSeeds: true,
+    torrentPort: 0,          // 0 = random
   };
 }
 

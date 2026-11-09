@@ -6,10 +6,29 @@
 // reassigned by them — mutating a property works from anywhere.
 
 import WebTorrent from 'webtorrent';
+import { app } from 'electron';
+import { getSettings } from './settings.js';
+
+// Startup-only network options come from settings (WebTorrent reads them once, when
+// the client is created). userData is resolvable before app 'ready'.
+let startup = {};
+try { startup = getSettings(app.getPath('userData')); } catch {}
+const port = parseInt(startup.torrentPort, 10);
 
 // uTP disabled: its UDP bind throws an uncaught EACCES in the main process on
 // some Windows setups (reserved port ranges / another instance); TCP is enough.
-export const client = new WebTorrent({ utp: false });
+export const client = new WebTorrent({
+  utp: false,
+  dht: startup.dht !== false,
+  lsd: startup.lsd !== false,
+  natUpnp: startup.natTraversal !== false,
+  natPmp: startup.natTraversal !== false,
+  webSeeds: startup.webSeeds !== false,
+  torrentPort: port >= 1024 && port <= 65535 ? port : 0,
+});
+
+// Live-tunable values (set by applyNetworkSettings in torrentManager).
+export const tuning = { windowBytes: 512 * 1024 * 1024, strategy: 'sequential', seedRatio: 0 };
 client.on('error', err => console.error('[webtorrent]', err.message));
 
 // Map<infoHash, { torrent, fileState, server, port, magnet, sockets, host,
