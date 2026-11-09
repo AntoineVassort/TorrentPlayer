@@ -178,116 +178,199 @@
         <span class="logo" data-i18n="settings.title">Settings</span>
       </header>
 
-      <div id="settings-content">
-        <section>
-          <h2 data-i18n="settings.general">General</h2>
-          <div class="field-row">
-            <label data-i18n="label.language">Language</label>
-            <select id="language-select">
-              <option value="en">English</option>
-              <option value="fr">Français</option>
-            </select>
-          </div>
-          <div class="field-row">
-            <label class="checkbox-label">
-              <input type="checkbox" id="auto-play-next">
-              <span data-i18n="label.autoPlayNext">Auto-play next episode</span>
-            </label>
-          </div>
-          <div class="field-row">
-            <label class="checkbox-label">
-              <input type="checkbox" id="auto-grab-followed">
-              <span data-i18n="label.autoGrabFollowed">Auto-download new episodes of followed series</span>
-            </label>
-          </div>
-          <div class="field-row">
-            <label data-i18n="label.preferredQuality">Preferred quality</label>
-            <select id="preferred-quality">
-              <option value="" data-i18n="quality.off">Ask every time</option>
-              <option value="best" data-i18n="quality.best">Best available</option>
-              <option value="4K">4K</option>
-              <option value="1080p">1080p</option>
-              <option value="720p">720p</option>
-              <option value="480p">480p</option>
-            </select>
-          </div>
-        </section>
+      <div id="settings-body">
+        <nav id="settings-nav">
+          <button type="button" class="snav-btn active" data-panel="general"><span class="snav-ico">⚙</span><span data-i18n="settings.general">General</span></button>
+          <button type="button" class="snav-btn" data-panel="player"><span class="snav-ico">▶</span><span data-i18n="settings.player">Video player</span></button>
+          <button type="button" class="snav-btn" data-panel="downloads"><span class="snav-ico">⬇</span><span data-i18n="settings.downloads">Downloads</span></button>
+          <button type="button" class="snav-btn" data-panel="network"><span class="snav-ico">⇅</span><span data-i18n="settings.network">Network &amp; performance</span></button>
+          <button type="button" class="snav-btn" data-panel="subtitles"><span class="snav-ico">CC</span><span data-i18n="settings.subtitles">Subtitles</span></button>
+          <button type="button" class="snav-btn" data-panel="torrentio"><span class="snav-ico">◎</span><span data-i18n="settings.torrentio">Torrentio</span></button>
+        </nav>
 
-        <section>
-          <h2 data-i18n="settings.player">Video player</h2>
-          <div class="field-row">
-            <select id="player-select"></select>
-            <button id="rescan-btn" data-i18n="btn.rescan">🔄 Re-scan</button>
-          </div>
-          <div class="field-row">
-            <input id="player-path" type="text" data-i18n-placeholder="player.placeholder" placeholder="Player path..." readonly>
-            <button id="browse-player-btn" data-i18n="btn.browse">Browse...</button>
-          </div>
-          <div class="field-row">
-            <label data-i18n="label.args">Arguments</label>
-            <input id="player-args" type="text" data-i18n-placeholder="args.placeholder" placeholder="e.g. --cache=yes --force-window">
-          </div>
-        </section>
+        <div id="settings-main">
+          <div id="settings-content">
 
-        <section>
-          <h2 data-i18n="settings.downloads">Downloads</h2>
-          <div class="field-row">
-            <input id="download-dir" type="text" data-i18n-placeholder="dir.placeholder" placeholder="Download folder..." readonly>
-            <button id="browse-dir-btn" data-i18n="btn.choose">Choose...</button>
-          </div>
-          <div class="field-row">
-            <label class="checkbox-label">
-              <input type="checkbox" id="delete-after-play">
-              <span data-i18n="label.deleteAfterPlay">Delete files when the app closes</span>
-            </label>
-          </div>
-          <div class="field-row">
-            <label data-i18n="label.maxDl">Max DL</label>
-            <input id="max-download" type="number" min="0" data-i18n-placeholder="limit.placeholder" placeholder="unlimited">
-            <span class="unit">KB/s</span>
-          </div>
-          <div class="field-row">
-            <label data-i18n="label.maxUl">Max UL</label>
-            <input id="max-upload" type="number" min="0" data-i18n-placeholder="limit.placeholder" placeholder="unlimited">
-            <span class="unit">KB/s</span>
-          </div>
-        </section>
+            <!-- General -->
+            <div class="spanel" data-panel="general">
+              <h2 class="spanel-title" data-i18n="settings.general">General</h2>
+              <div class="sgroup">
+                <div class="setting">
+                  <div class="setting-text"><div class="setting-label" data-i18n="label.language">Language</div><div class="setting-desc" data-i18n="desc.language">Interface language</div></div>
+                  <div class="setting-control"><select id="language-select"><option value="en">English</option><option value="fr">Français</option></select></div>
+                </div>
+                <div class="setting">
+                  <div class="setting-text"><div class="setting-label" data-i18n="label.preferredQuality">Preferred quality</div><div class="setting-desc" data-i18n="desc.quality">Skips the stream picker when this quality is available</div></div>
+                  <div class="setting-control">
+                    <select id="preferred-quality">
+                      <option value="" data-i18n="quality.off">Ask every time</option>
+                      <option value="best" data-i18n="quality.best">Best available</option>
+                      <option value="4K">4K</option>
+                      <option value="1080p">1080p</option>
+                      <option value="720p">720p</option>
+                      <option value="480p">480p</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="setting">
+                  <div class="setting-text"><div class="setting-label" data-i18n="label.autoPlayNext">Auto-play next episode</div><div class="setting-desc" data-i18n="desc.autoNext">Starts the next episode when one ends</div></div>
+                  <div class="setting-control"><label class="switch"><input type="checkbox" id="auto-play-next"><span class="slider"></span></label></div>
+                </div>
+                <div class="setting">
+                  <div class="setting-text"><div class="setting-label" data-i18n="label.autoGrabFollowed">Auto-download new episodes of followed series</div><div class="setting-desc" data-i18n="desc.autoGrab">Grabs new episodes of the series you follow</div></div>
+                  <div class="setting-control"><label class="switch"><input type="checkbox" id="auto-grab-followed"><span class="slider"></span></label></div>
+                </div>
+              </div>
+            </div>
 
-        <section>
-          <h2 data-i18n="settings.subtitles">Subtitles</h2>
-          <div class="field-row">
-            <label data-i18n="label.subLang">Language</label>
-            <select id="subtitle-language">
-              <option value="off" data-i18n="sub.off">Off</option>
-              <option value="en">English</option>
-              <option value="fr">Français</option>
-              <option value="es">Español</option>
-              <option value="de">Deutsch</option>
-              <option value="it">Italiano</option>
-              <option value="pt">Português</option>
-              <option value="ru">Русский</option>
-              <option value="ar">العربية</option>
-              <option value="ja">日本語</option>
-            </select>
-          </div>
-          <div class="field-row">
-            <label data-i18n="label.osKey">API key</label>
-            <input id="opensubtitles-key" type="text" data-i18n-placeholder="sub.keyPlaceholder" placeholder="OpenSubtitles API key">
-          </div>
-          <p class="settings-hint" data-i18n-html="settings.subtitlesHint">Free key at <span class="settings-link" data-link="opensubtitles">opensubtitles.com</span>. Auto-fetches when a torrent has no embedded subtitles.</p>
-        </section>
+            <!-- Player -->
+            <div class="spanel hidden" data-panel="player">
+              <h2 class="spanel-title" data-i18n="settings.player">Video player</h2>
+              <div class="sgroup">
+                <div class="setting stack">
+                  <div class="setting-text"><div class="setting-label" data-i18n="label.player">Player</div></div>
+                  <div class="setting-control row"><select id="player-select"></select><button id="rescan-btn" type="button" class="sbtn" data-i18n="btn.rescan">🔄 Re-scan</button></div>
+                </div>
+                <div class="setting stack">
+                  <div class="setting-text"><div class="setting-label" data-i18n="label.playerPath">Path</div></div>
+                  <div class="setting-control row"><input id="player-path" type="text" data-i18n-placeholder="player.placeholder" placeholder="Player path..." readonly><button id="browse-player-btn" type="button" class="sbtn" data-i18n="btn.browse">Browse...</button></div>
+                </div>
+                <div class="setting stack">
+                  <div class="setting-text"><div class="setting-label" data-i18n="label.args">Arguments</div></div>
+                  <div class="setting-control"><input id="player-args" type="text" data-i18n-placeholder="args.placeholder" placeholder="e.g. --cache=yes --force-window"></div>
+                </div>
+              </div>
+            </div>
 
-        <section>
-          <h2 data-i18n="settings.torrentio">Torrentio</h2>
-          <div class="field-row">
-            <label data-i18n="label.torrentioUrl">URL</label>
-            <input id="torrentio-url" type="text" placeholder="https://torrentio.strem.fun">
-          </div>
-          <p class="settings-hint" data-i18n-html="settings.torrentioHint">Configure at <span class="settings-link">torrentio.strem.fun</span></p>
-        </section>
+            <!-- Downloads -->
+            <div class="spanel hidden" data-panel="downloads">
+              <h2 class="spanel-title" data-i18n="settings.downloads">Downloads</h2>
+              <div class="sgroup">
+                <div class="setting stack">
+                  <div class="setting-text"><div class="setting-label" data-i18n="label.downloadDir">Download folder</div></div>
+                  <div class="setting-control row"><input id="download-dir" type="text" data-i18n-placeholder="dir.placeholder" placeholder="Download folder..." readonly><button id="browse-dir-btn" type="button" class="sbtn" data-i18n="btn.choose">Choose...</button></div>
+                </div>
+                <div class="setting">
+                  <div class="setting-text"><div class="setting-label" data-i18n="label.deleteAfterPlay">Delete files when the app closes</div></div>
+                  <div class="setting-control"><label class="switch"><input type="checkbox" id="delete-after-play"><span class="slider"></span></label></div>
+                </div>
+              </div>
+            </div>
 
-        <div id="settings-actions">
-          <button id="save-btn" class="btn-primary" data-i18n="btn.save">Save</button>
+            <!-- Network & performance -->
+            <div class="spanel hidden" data-panel="network">
+              <h2 class="spanel-title" data-i18n="settings.network">Network &amp; performance</h2>
+
+              <div class="sgroup">
+                <div class="sgroup-title" data-i18n="group.speed">Speed limits</div>
+                <div class="setting">
+                  <div class="setting-text"><div class="setting-label" data-i18n="label.maxDl">Max DL</div><div class="setting-desc" data-i18n="desc.maxDl">Empty = no limit</div></div>
+                  <div class="setting-control"><div class="input-unit"><input id="max-download" type="number" min="0" data-i18n-placeholder="limit.placeholder" placeholder="unlimited"><span class="unit">KB/s</span></div></div>
+                </div>
+                <div class="setting">
+                  <div class="setting-text"><div class="setting-label" data-i18n="label.maxUl">Max UL</div><div class="setting-desc" data-i18n="desc.maxUl">Capping upload keeps your connection responsive</div></div>
+                  <div class="setting-control"><div class="input-unit"><input id="max-upload" type="number" min="0" data-i18n-placeholder="limit.placeholder" placeholder="unlimited"><span class="unit">KB/s</span></div></div>
+                </div>
+              </div>
+
+              <div class="sgroup">
+                <div class="sgroup-title" data-i18n="group.connections">Connections &amp; scheduling</div>
+                <div class="setting">
+                  <div class="setting-text"><div class="setting-label" data-i18n="label.maxConns">Max connections</div><div class="setting-desc" data-i18n="desc.maxConns">More finds more sources but costs more CPU</div></div>
+                  <div class="setting-control"><div class="input-unit"><input id="max-conns" type="number" min="1" max="500" placeholder="55"><span class="unit" data-i18n="label.perTorrent">per torrent</span></div></div>
+                </div>
+                <div class="setting">
+                  <div class="setting-text"><div class="setting-label" data-i18n="label.strategy">Download order</div><div class="setting-desc" data-i18n="desc.strategy">Sequential fills the start of the file first so playback starts fast</div></div>
+                  <div class="setting-control">
+                    <select id="strategy">
+                      <option value="sequential" data-i18n="strategy.sequential">Sequential (best for streaming)</option>
+                      <option value="rarest" data-i18n="strategy.rarest">Rarest first (best for swarm health)</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="setting">
+                  <div class="setting-text"><div class="setting-label" data-i18n="label.aheadWindow">Read-ahead</div><div class="setting-desc" data-i18n="desc.ahead">How far ahead of the start of the missing data pieces are requested</div></div>
+                  <div class="setting-control"><div class="input-unit"><input id="ahead-window" type="number" min="64" max="8192" step="64" placeholder="512"><span class="unit">MB</span></div></div>
+                </div>
+                <div class="setting">
+                  <div class="setting-text"><div class="setting-label" data-i18n="label.seedRatio">Stop seeding at ratio</div><div class="setting-desc" data-i18n="desc.seedRatio">Seeding stops once you have uploaded this multiple of the file size (0 = never)</div></div>
+                  <div class="setting-control"><div class="input-unit"><input id="seed-ratio" type="number" min="0" step="0.1" placeholder="0"><span class="unit">×</span></div></div>
+                </div>
+              </div>
+
+              <div class="sgroup">
+                <div class="sgroup-title"><span data-i18n="group.discovery">Discovery &amp; ports</span><span class="pill" data-i18n="settings.networkRestart">Applied at next launch</span></div>
+                <div class="setting">
+                  <div class="setting-text"><div class="setting-label" data-i18n="label.dht">DHT</div><div class="setting-desc" data-i18n="desc.dht">Finds peers without relying on trackers</div></div>
+                  <div class="setting-control"><label class="switch"><input type="checkbox" id="net-dht"><span class="slider"></span></label></div>
+                </div>
+                <div class="setting">
+                  <div class="setting-text"><div class="setting-label" data-i18n="label.lsd">Local peer discovery</div><div class="setting-desc" data-i18n="desc.lsd">Finds peers on your local network</div></div>
+                  <div class="setting-control"><label class="switch"><input type="checkbox" id="net-lsd"><span class="slider"></span></label></div>
+                </div>
+                <div class="setting">
+                  <div class="setting-text"><div class="setting-label" data-i18n="label.nat">UPnP / NAT-PMP</div><div class="setting-desc" data-i18n="desc.nat">Opens a port on your router to accept more incoming peers</div></div>
+                  <div class="setting-control"><label class="switch"><input type="checkbox" id="net-nat"><span class="slider"></span></label></div>
+                </div>
+                <div class="setting">
+                  <div class="setting-text"><div class="setting-label" data-i18n="label.webseeds">Web seeds</div><div class="setting-desc" data-i18n="desc.webseeds">Uses HTTP sources embedded in the torrent</div></div>
+                  <div class="setting-control"><label class="switch"><input type="checkbox" id="net-webseeds"><span class="slider"></span></label></div>
+                </div>
+                <div class="setting">
+                  <div class="setting-text"><div class="setting-label" data-i18n="label.listenPort">Listening port</div><div class="setting-desc" data-i18n="desc.port">Fixed port to forward on your router (1024–65535). 0 = random</div></div>
+                  <div class="setting-control"><input id="net-port" type="number" min="0" max="65535" placeholder="0"></div>
+                </div>
+              </div>
+
+              <div class="spanel-foot"><button id="net-defaults-btn" type="button" class="sbtn" data-i18n="btn.netDefaults">Restore network defaults</button></div>
+            </div>
+
+            <!-- Subtitles -->
+            <div class="spanel hidden" data-panel="subtitles">
+              <h2 class="spanel-title" data-i18n="settings.subtitles">Subtitles</h2>
+              <div class="sgroup">
+                <div class="setting">
+                  <div class="setting-text"><div class="setting-label" data-i18n="label.subLang">Language</div></div>
+                  <div class="setting-control">
+                    <select id="subtitle-language">
+                      <option value="off" data-i18n="sub.off">Off</option>
+                      <option value="en">English</option>
+                      <option value="fr">Français</option>
+                      <option value="es">Español</option>
+                      <option value="de">Deutsch</option>
+                      <option value="it">Italiano</option>
+                      <option value="pt">Português</option>
+                      <option value="ru">Русский</option>
+                      <option value="ar">العربية</option>
+                      <option value="ja">日本語</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="setting stack">
+                  <div class="setting-text"><div class="setting-label" data-i18n="label.osKey">API key</div></div>
+                  <div class="setting-control"><input id="opensubtitles-key" type="text" data-i18n-placeholder="sub.keyPlaceholder" placeholder="OpenSubtitles API key"></div>
+                </div>
+                <p class="settings-hint" data-i18n-html="settings.subtitlesHint">Free key at <span class="settings-link" data-link="opensubtitles">opensubtitles.com</span>. Auto-fetches when a torrent has no embedded subtitles.</p>
+              </div>
+            </div>
+
+            <!-- Torrentio -->
+            <div class="spanel hidden" data-panel="torrentio">
+              <h2 class="spanel-title" data-i18n="settings.torrentio">Torrentio</h2>
+              <div class="sgroup">
+                <div class="setting stack">
+                  <div class="setting-text"><div class="setting-label" data-i18n="label.torrentioUrl">URL</div></div>
+                  <div class="setting-control"><input id="torrentio-url" type="text" placeholder="https://torrentio.strem.fun"></div>
+                </div>
+                <p class="settings-hint" data-i18n-html="settings.torrentioHint">Configure at <span class="settings-link">torrentio.strem.fun</span></p>
+              </div>
+            </div>
+
+          </div>
+
+          <div id="settings-actions">
+            <button id="save-btn" class="btn-primary" data-i18n="btn.save">Save</button>
+          </div>
         </div>
       </div>
     </div>

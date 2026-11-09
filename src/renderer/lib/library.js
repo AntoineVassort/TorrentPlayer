@@ -354,8 +354,31 @@ function populateSettings() {
   document.getElementById('preferred-quality').value = settings.preferredQuality || '';
   document.getElementById('download-dir').value = settings.downloadDir || '';
   document.getElementById('delete-after-play').checked = !!settings.deleteAfterPlay;
-  document.getElementById('max-download').value = settings.maxDownload || '';
-  document.getElementById('max-upload').value = settings.maxUpload || '';
+  // Side-nav: show one panel at a time (display:none keeps hidden panels free), always open on General.
+  const showPanel = name => {
+    document.querySelectorAll('#settings-nav .snav-btn').forEach(b => b.classList.toggle('active', b.dataset.panel === name));
+    document.querySelectorAll('#settings-content .spanel').forEach(p => p.classList.toggle('hidden', p.dataset.panel !== name));
+    document.getElementById('settings-content').scrollTop = 0;
+  };
+  document.querySelectorAll('#settings-nav .snav-btn').forEach(b => { b.onclick = () => showPanel(b.dataset.panel); });
+  showPanel('general');
+
+  // Network & performance. Defaults mirror settings.js (main process).
+  const fillNet = n => {
+    document.getElementById('max-download').value = n.maxDownload || '';
+    document.getElementById('max-upload').value = n.maxUpload || '';
+    document.getElementById('max-conns').value = n.maxConns ?? 55;
+    document.getElementById('seed-ratio').value = n.seedRatioLimit ?? 0;
+    document.getElementById('strategy').value = n.strategy || 'sequential';
+    document.getElementById('ahead-window').value = n.aheadWindowMB ?? 512;
+    document.getElementById('net-dht').checked = n.dht !== false;
+    document.getElementById('net-lsd').checked = n.lsd !== false;
+    document.getElementById('net-nat').checked = n.natTraversal !== false;
+    document.getElementById('net-webseeds').checked = n.webSeeds !== false;
+    document.getElementById('net-port').value = n.torrentPort || 0;
+  };
+  fillNet(settings);
+  document.getElementById('net-defaults-btn').onclick = () => fillNet({});
   document.getElementById('torrentio-url').value = settings.torrentioUrl || '';
   document.getElementById('subtitle-language').value = settings.subtitleLanguage || 'off';
   document.getElementById('opensubtitles-key').value = settings.openSubtitlesApiKey || '';
@@ -403,6 +426,12 @@ async function saveSettings() {
   const deleteAfterPlay = document.getElementById('delete-after-play').checked;
   const maxDl = parseInt(document.getElementById('max-download').value) || 0;
   const maxUl = parseInt(document.getElementById('max-upload').value) || 0;
+  const maxConns = Math.min(Math.max(parseInt(document.getElementById('max-conns').value) || 55, 1), 500);
+  const seedRatioLimit = Math.max(parseFloat(document.getElementById('seed-ratio').value) || 0, 0);
+  const strategy = document.getElementById('strategy').value === 'rarest' ? 'rarest' : 'sequential';
+  const aheadWindowMB = Math.min(Math.max(parseInt(document.getElementById('ahead-window').value) || 512, 64), 8192);
+  const portRaw = parseInt(document.getElementById('net-port').value) || 0;
+  const torrentPort = portRaw >= 1024 && portRaw <= 65535 ? portRaw : 0;
   const language = document.getElementById('language-select').value;
   const autoPlayNext = document.getElementById('auto-play-next').checked;
   const autoGrabFollowed = document.getElementById('auto-grab-followed').checked;
@@ -418,6 +447,15 @@ async function saveSettings() {
     deleteAfterPlay,
     maxDownload: maxDl || null,
     maxUpload: maxUl || null,
+    maxConns,
+    seedRatioLimit,
+    strategy,
+    aheadWindowMB,
+    dht: document.getElementById('net-dht').checked,
+    lsd: document.getElementById('net-lsd').checked,
+    natTraversal: document.getElementById('net-nat').checked,
+    webSeeds: document.getElementById('net-webseeds').checked,
+    torrentPort,
     language,
     autoPlayNext,
     autoGrabFollowed,
