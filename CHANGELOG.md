@@ -3,6 +3,26 @@
 All notable changes to TorrentPlayer are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.15.0] - 2026-11-09
+
+### Added
+- A torrent that is verifying its existing files after a restart now shows a card with the real progress ("Verifying files… 42 %") instead of nothing; it can be cancelled from there.
+- *Protocol encryption* switch in Settings → Network & performance (on by default, applied at next launch). Each encrypted connection runs a synchronous Diffie-Hellman exchange on the main thread, so turning it off lowers CPU at the cost of plaintext-only peers.
+
+### Fixed
+- Whole-season mode now uses the same sliding window as single-file downloads, so a big season pack no longer makes WebTorrent rescan the whole pack.
+- The 60 s "no peers" timer stops as soon as the torrent metadata arrives; it could otherwise kill a torrent that was merely verifying a large file.
+- Error messages from the main process are shown in the interface language (they were hard-coded in French) and without the technical "Error invoking remote method" prefix.
+- The cast bar buttons ("Subtitles: on", "Stop casting") had no styles and showed as native white buttons.
+- The top navigation no longer wraps or hides its icons at small window sizes (container queries); download cards keep a readable width on large windows.
+
+### Changed
+- Windows and Linux builds no longer ship ~46 MB of unused Chromium locale packs (only `en-US` and `fr` are kept; Chromium falls back to `en-US`). The Windows build goes from ~484 MB to ~438 MB.
+- Poster-cache files untouched for 90 days are purged (the cache was ~1000 files / 40 MB and never shrank); they are simply fetched again if needed.
+- One accent colour family: the former indigo is now the app's steel blue.
+- Colour emoji in the interface (🔄 📺 🔍 📁 💬 🔒 🎬 ⭐) replaced by the app's monochrome SVG icons.
+- The Settings page adapts with a container query instead of a viewport media query.
+
 ## [1.14.1] - 2026-11-09
 
 > **About v1.14.0:** it was tagged but **never published**. Its release job was cancelled because GitHub retired the `macos-14` runner image (macOS Apple Silicon build), so no archive was ever uploaded. Everything from 1.14.0 is included here, plus the fix below.
@@ -176,6 +196,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 ### Added
 - Library view, multi-source search, filters and auto-update.
 
+[1.15.0]: https://github.com/AntoineVassort/TorrentPlayer/compare/v1.14.1...v1.15.0
 [1.14.1]: https://github.com/AntoineVassort/TorrentPlayer/compare/v1.14.0...v1.14.1
 [1.14.0]: https://github.com/AntoineVassort/TorrentPlayer/compare/v1.13.0...v1.14.0
 [1.13.0]: https://github.com/AntoineVassort/TorrentPlayer/compare/v1.12.0...v1.13.0
