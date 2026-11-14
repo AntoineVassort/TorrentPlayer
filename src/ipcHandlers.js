@@ -11,16 +11,19 @@ import { getSettings, saveSettings } from './settings.js';
 import { detect } from './playerDetector.js';
 import { addEntry, loadHistory, removeEntry, updateEntry } from './history.js';
 import { loadFollows, addFollow, removeFollow, updateFollow } from './follows.js';
-import { markEpisode, getSeriesProgress } from './series-progress.js';
+import { setMarks, getAllMarks, loadTitles, updateTitle } from './series-progress.js';
 import { fetchMetaFromCinemeta, fetchSeriesEpisodes } from './metadata.js';
 import { discoverDevices, castMedia, stopCast, setSubtitles, getLocalIP, resolveHostIPv4 } from './chromecast.js';
 import { needsAudioTranscode } from './transcode.js';
 import { discoverDlnaDevices, castDlna, stopDlna } from './dlna.js';
 import {
   addTorrentInternal, applyQueueRules, saveSession, switchEpisodeFile,
-  findSubtitle, focusFile, applyNetworkSettings, pauseSeeding, mimeFor,
+  findSubtitle, focusFile, applyNetworkSettings, pauseSeeding, mimeFor, isVideo,
 } from './torrentManager.js';
-import { grabFollowedEpisode, checkFollows } from './watchProgress.js';
+import {
+  grabFollowedEpisode, checkFollows, knownIdentity, libraryIdentity, historyKey,
+  recordDoneFiles, refreshLibrarySeries, notifyLibraryChanged,
+} from './watchProgress.js';
 import { ensureSubtitle } from './playback.js';
 import { srtToVtt, mkvSubtitleVtt } from './subtitles.js';
 
@@ -95,6 +98,45 @@ export function safeOpenExternal(url) {
   } catch {}
 }
 
+// What the Library / a title page shows: manual marks merged with what the app saw itself
+// (watched / completed history entries, finished files of active torrents), the progress of
+// started episodes, and a magnet to play each downloaded one. `onlyId` limits it to one title.
+function libraryState(onlyId) {
+  const userData = app.getPath('userData');
+  const marks = getAllMarks(userData);
+  const watched = {}, downloaded = {}, inProgress = {}, sources = {};
+  const keep = (tid) => tid && (onlyId == null || tid === onlyId);
+  const set = (map, tid, key, v = true) => { if (keep(tid) && key) (map[tid] ||= {})[key] = v; };
+  for (const [tid, keys] of Object.entries(marks.watched)) for (const k of Object.keys(keys)) set(watched, tid, k);
+  for (const [tid, keys] of Object.entries(marks.downloaded)) for (const k of Object.keys(keys)) set(downloaded, tid, k);
+
+  for (const e of loadHistory(userData)) {
+    if (!e.imdbId) continue;
+    const key = historyKey(e);
+    if (!key) continue;
+    const frac = e.resumeDuration > 0 ? e.resumePos / e.resumeDuration : 0;
+    if (e.watched || frac >= 0.85) set(watched, e.imdbId, key);
+    else if (e.resumePos > 5) set(inProgress, e.imdbId, key, e.resumeDuration > 0 ? frac : 0.01);
+    if (e.completed) set(downloaded, e.imdbId, key);
+    if (e.magnet && keep(e.imdbId) && !sources[e.imdbId]?.[key]) {
+      set(sources, e.imdbId, key, { id: e.id, magnet: e.magnet, resumePos: e.resumePos || null });
+    }
+  }
+  for (const entry of active.values()) {
+    const magnet = entry.magnet || entry.torrent.magnetURI;
+    for (const f of entry.torrent.files) {
+      if (!isVideo(f.name)) continue;
+      const id = libraryIdentity(entry, f);
+      const key = id.episode != null ? `${id.season}:${id.episode}` : (id.kind === 'movie' ? 'movie' : null);
+      if (!id.imdbId || !key) continue;
+      if (f.done) set(downloaded, id.imdbId, key);
+      if (magnet && (f.done || f === entry.fileState.file)) set(sources, id.imdbId, key, { id: entry.torrent.infoHash, magnet, resumePos: null });
+    }
+  }
+  const titles = loadTitles(userData);
+  return { watched, downloaded, inProgress, sources, titles: onlyId == null ? titles : { [onlyId]: titles[onlyId] || null } };
+}
+
 export function registerAppIpc() {
   ipcMain.handle('torrent:add', async (_, source, resumePos = null, episodeContext = null) => {
     if (typeof source !== 'string' || !source.trim()) throw new Error('Invalid source');
@@ -102,7 +144,7 @@ export function registerAppIpc() {
     const epCtx = (episodeContext && typeof episodeContext.id === 'string')
       ? {
           id: episodeContext.id,
-          type: episodeContext.type === 'anime' ? 'anime' : 'series',
+          type: ['anime', 'movie'].includes(episodeContext.type) ? episodeContext.type : 'series',
           season: Number.isInteger(episodeContext.season) ? episodeContext.season : null,
           episode: Number.isInteger(episodeContext.episode) ? episodeContext.episode : null,
           title: typeof episodeContext.title === 'string' ? episodeContext.title : null,
@@ -148,7 +190,7 @@ export function registerAppIpc() {
     if (result.name) {
       fetchMetaFromCinemeta(result.name).then(meta => {
         const entry = active.get(result.id);
-        if (entry && meta) entry.meta = meta;
+        if (entry && meta) { entry.meta = meta; recordDoneFiles(entry); }
       }).catch(() => {});
     }
 
@@ -215,7 +257,10 @@ export function registerAppIpc() {
         resumePos: entry.resumePos || null,
         resumeDuration: entry.resumeDuration || null,
         ...(entry.meta || {}),
+        ...knownIdentity(entry),
+        completed: !!entry.fileState.file?.done,
       });
+      notifyLibraryChanged();
     }
 
     entry.playback?.socket?.destroy();
@@ -409,12 +454,50 @@ export function registerAppIpc() {
     return fetchSeriesEpisodes(imdbId, tvmazeId || null);
   });
 
-  ipcMain.handle('series:progress', (_, imdbId) => {
-    return getSeriesProgress(app.getPath('userData'), imdbId);
+  // Marks of one title (series page / movie page).
+  ipcMain.handle('series:progress', (_, titleId) => {
+    if (typeof titleId !== 'string' || !titleId) return libraryState('');
+    return libraryState(titleId);
   });
 
-  ipcMain.handle('series:markWatched', (_, imdbId, season, episode, watched) => {
-    markEpisode(app.getPath('userData'), imdbId, season, episode, watched !== false);
+  // Whole Library: history + marks + cached episode lists. Also refreshes stale episode lists
+  // in the background (pushes `library:changed` when done).
+  ipcMain.handle('library:get', () => {
+    refreshLibrarySeries().catch(() => {});
+    return { history: loadHistory(app.getPath('userData')), ...libraryState(null) };
+  });
+
+  // Manual check / uncheck of "watched" or "downloaded" for episodes (keys "s:e") or a movie
+  // ("movie"), for things the app did not see happen (watched elsewhere, already on disk…).
+  ipcMain.handle('library:mark', (_, titleId, field, keys, on, info) => {
+    if (typeof titleId !== 'string' || !titleId || titleId.length > 64) throw new Error('Invalid id');
+    if (field !== 'watched' && field !== 'downloaded') throw new Error('Invalid field');
+    const list = (Array.isArray(keys) ? keys : [])
+      .filter(k => typeof k === 'string' && /^(movie|(\d+|null):\d+)$/.test(k)).slice(0, 2000);
+    const userData = app.getPath('userData');
+    setMarks(userData, field, titleId, list, !!on);
+    if (!on) {
+      // Unchecking must also beat what the app recorded on its own in history.json.
+      for (const e of loadHistory(userData)) {
+        if (e.imdbId !== titleId || !list.includes(historyKey(e))) continue;
+        if (field === 'watched') {
+          // Only entries counted as watched (flag, or ≥ 85 % played). An episode merely in
+          // progress keeps its resume position.
+          const frac = e.resumeDuration > 0 ? e.resumePos / e.resumeDuration : 0;
+          if (e.watched || frac >= 0.85) updateEntry(userData, e.id, { watched: false, resumePos: null, resumeDuration: null });
+        } else if (e.completed) updateEntry(userData, e.id, { completed: false });
+      }
+    }
+    if (info && typeof info === 'object') {
+      const kind = info.kind === 'movie' ? 'movie' : 'series';
+      updateTitle(userData, titleId, {
+        kind,
+        title: typeof info.title === 'string' ? info.title.slice(0, 300) : null,
+        poster: typeof info.poster === 'string' ? info.poster : null,
+      });
+      if (on && kind === 'series') refreshLibrarySeries().catch(() => {});
+    }
+    notifyLibraryChanged();
     return true;
   });
 

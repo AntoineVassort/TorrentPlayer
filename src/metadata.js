@@ -176,6 +176,8 @@ export async function fetchMetaFromCinemeta(name) {
 
   return {
     title: best.name,
+    imdbId: typeof best.id === 'string' && /^tt\d+$/.test(best.id) ? best.id : null,
+    kind: best._type,
     year: best.year || best.releaseInfo || null,
     rating: best.imdbRating || null,
     poster: await fetchImgBase64(best.poster || null),

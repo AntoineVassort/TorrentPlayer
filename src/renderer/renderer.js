@@ -16,7 +16,13 @@ async function init() {
   window.api.onNextEpisode(data => showNextEpisodeBanner(data));
   window.api.onNewEpisode(data => {
     toast(t('follow.newEpisode', { label: `${data.title} ${data.label}` }));
-    if (!document.getElementById('history-view').classList.contains('hidden')) renderFollows();
+    if (!document.getElementById('history-view').classList.contains('hidden')) renderHistory();
+  });
+  // Something in the Library changed (episode watched / downloaded, manual check, new
+  // episode list): refresh whatever Library screen is open.
+  window.api.onLibraryChanged(() => {
+    if (!document.getElementById('history-view').classList.contains('hidden')) renderHistory();
+    if (!document.getElementById('detail-view').classList.contains('hidden')) refreshDetailMarks();
   });
   window.api.onUpdateAvailable(({ version, url }) => {
     const releaseUrl = url;

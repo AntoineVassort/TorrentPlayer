@@ -10,7 +10,9 @@ let discoverDone = {};          // cat → true when the source has no more page
 let discoverLoading = false;    // guards concurrent "load more" fetches
 let detailOrigin = 'main';      // 'main' (Discover) | 'history' (Library) — where Back returns
 let detailItem = null;          // currently-open detail item (guards async meta races)
-let detailProgress = {};        // watched map for the open series
+let detailMarks = { watched: {}, downloaded: {}, inProgress: {}, sources: {} };   // marks of the open title
+let detailEpisodes = [];        // every episode of the open series (TVmaze)
+let detailSeasonEps = [];       // episodes of the season tab on screen
 let detailSelectedEp = null;
 let torrentioTitles = [];
 let torrentioCurrentItem = null;
@@ -227,6 +229,8 @@ function torrentioGoBack(type) {
 function closeDetailView() {
   document.getElementById('detail-view').classList.add('hidden');
   document.getElementById(detailOrigin === 'history' ? 'history-view' : 'main-view').classList.remove('hidden');
+  // Checks made on the title page change the Library cards behind it.
+  if (detailOrigin === 'history') renderHistory();
 }
 
 // Popcorn Time–style detail. `origin` decides where Back returns ('main' | 'history').
@@ -251,13 +255,22 @@ async function openDetailView(item, origin = 'main') {
       .catch(() => {});
   }
 
+  document.getElementById('detail-movie-status').innerHTML = '';
   if (isSeries) {
     loadDetailEpisodes(item);
   } else {
     const area = document.getElementById('detail-streams-area');
     area.innerHTML = `<div class="torrentio-loading">${t('torrentio.loadingStreams')}</div>`;
     if (item.imdbId) {
-      fetchAndRenderDetailStreams(item.imdbId, 'movie', null, null, item);
+      loadMovieMarks(item);
+      // From the Library, don't fetch (and possibly auto-start) a stream until asked.
+      if (origin === 'history') {
+        area.innerHTML = `<button class="detail-sources-btn">${esc(t('detail.showSources'))}</button>`;
+        area.querySelector('.detail-sources-btn').addEventListener('click',
+          () => fetchAndRenderDetailStreams(item.imdbId, 'movie', null, null, item));
+      } else {
+        fetchAndRenderDetailStreams(item.imdbId, 'movie', null, null, item);
+      }
     } else {
       window.api.torrentioSearch(item.title, 'anime').then(results => {
         if (results.length) fetchAndRenderDetailStreams(results[0].id, results[0].type, null, 1, results[0]);
@@ -326,9 +339,9 @@ async function loadDetailEpisodes(item) {
 
   if (item.type === 'anime' || !item.imdbId) { loadDetailAnime(item); return; }
 
-  let episodes = [], progress = {};
+  let episodes = [], state = null;
   try {
-    [{ episodes }, progress] = await Promise.all([
+    [{ episodes }, state] = await Promise.all([
       window.api.seriesEpisodes(item.imdbId, item.tvmazeId || null),
       window.api.seriesProgress(item.imdbId),
     ]);
@@ -339,15 +352,20 @@ async function loadDetailEpisodes(item) {
   if (detailItem !== item) return;
   if (!episodes.length) { loadDetailAnime(item); return; }
 
-  detailProgress = progress || {};
+  setDetailMarks(item, state);
+  detailEpisodes = episodes;
   const seasons = {};
   for (const ep of episodes) (seasons[ep.season] = seasons[ep.season] || []).push(ep);
   const seasonKeys = Object.keys(seasons).map(Number).sort((a, b) => a - b);
 
+  // Open on the season of the next episode to watch (Library use), else the first season.
+  const { next } = seriesStatus(episodes, detailMarks.watched, detailMarks.downloaded);
+  const startSeason = next && seasons[next.season] ? next.season : seasonKeys[0];
+
   seasonList.innerHTML = '';
-  seasonKeys.forEach((s, i) => {
+  for (const s of seasonKeys) {
     const b = document.createElement('button');
-    b.className = 'detail-season-tab' + (i === 0 ? ' active' : '');
+    b.className = 'detail-season-tab' + (s === startSeason ? ' active' : '');
     b.textContent = t('series.season', { n: s });
     b.addEventListener('click', () => {
       seasonList.querySelectorAll('.detail-season-tab').forEach(x => x.classList.remove('active'));
@@ -355,56 +373,212 @@ async function loadDetailEpisodes(item) {
       renderDetailEpisodeList(item, seasons[s]);
     });
     seasonList.appendChild(b);
-  });
-  renderDetailEpisodeList(item, seasons[seasonKeys[0]]);
+  }
+  renderDetailEpisodeList(item, seasons[startSeason], next ? epKey(next.season, next.number) : null);
 }
 
-function renderDetailEpisodeList(item, eps) {
+// Keep only the open title's part of a `series:progress` answer.
+function setDetailMarks(item, state) {
+  const id = item.imdbId;
+  detailMarks = {
+    watched: state?.watched?.[id] || {},
+    downloaded: state?.downloaded?.[id] || {},
+    inProgress: state?.inProgress?.[id] || {},
+    sources: state?.sources?.[id] || {},
+  };
+}
+
+// Title / poster sent with a manual check, so the Library can show a title it never downloaded.
+function markInfo(item) {
+  return { title: item.title, poster: item.posterUrl || item.poster || null, kind: item.type === 'movie' ? 'movie' : 'series' };
+}
+
+async function toggleMark(item, field, keys, on) {
+  const map = detailMarks[field];
+  for (const k of keys) { if (on) map[k] = true; else delete map[k]; }
+  try { await window.api.libraryMark(item.imdbId, field, keys, on, markInfo(item)); }
+  catch (err) { toast(friendlyError(err), true); }
+}
+
+// Re-read the marks of the open title (after a download finished, a manual check…) and
+// repaint without losing the season / episode on screen.
+async function refreshDetailMarks() {
+  const item = detailItem;
+  if (!item?.imdbId) return;
+  let state;
+  try { state = await window.api.seriesProgress(item.imdbId); } catch { return; }
+  if (detailItem !== item) return;
+  setDetailMarks(item, state);
+  if (item.type === 'movie') { renderMovieStatus(item); return; }
+  if (detailSeasonEps.length) {
+    const keep = detailSelectedEp ? epKey(detailSelectedEp.season, detailSelectedEp.number) : null;
+    renderDetailEpisodeList(item, detailSeasonEps, keep);
+  }
+}
+
+function renderDetailEpisodeList(item, eps, selectKey = null) {
+  detailSeasonEps = eps;
   const epList = document.getElementById('detail-episode-list');
   epList.innerHTML = '';
+  const { next } = seriesStatus(detailEpisodes, detailMarks.watched, detailMarks.downloaded);
+  const nextKey = next ? epKey(next.season, next.number) : null;
+
+  // Season-wide check (episodes watched elsewhere): toggles the whole season.
+  const keys = eps.map(ep => epKey(ep.season, ep.number));
+  const allWatched = keys.length > 0 && keys.every(k => detailMarks.watched[k]);
+  const tools = document.createElement('div');
+  tools.className = 'detail-ep-tools';
+  tools.innerHTML = `<button class="detail-ep-bulk">${ICONS.eye}<span>${esc(t(allWatched ? 'series.unmarkSeason' : 'series.markSeasonWatched'))}</span></button>`;
+  tools.querySelector('button').addEventListener('click', async () => {
+    await toggleMark(item, 'watched', keys, !allWatched);
+    renderDetailEpisodeList(item, eps, detailSelectedEp ? epKey(detailSelectedEp.season, detailSelectedEp.number) : null);
+  });
+  epList.appendChild(tools);
+
+  let toSelect = null;
   for (const ep of eps) {
-    const key = `${ep.season}:${ep.number}`;
-    const watched = !!detailProgress[key];
+    const key = epKey(ep.season, ep.number);
+    const watched = !!detailMarks.watched[key];
+    const downloaded = !!detailMarks.downloaded[key];
+    const started = !watched && detailMarks.inProgress[key] != null;
     const row = document.createElement('div');
-    row.className = 'detail-ep-row' + (watched ? ' ep-watched' : '');
+    row.className = 'detail-ep-row' + (watched ? ' ep-watched' : '') + (key === nextKey ? ' ep-next' : '');
     row.innerHTML = `
       <span class="detail-ep-num">${esc(String(ep.number))}</span>
       <span class="detail-ep-name">${esc(ep.name || `Episode ${ep.number}`)}</span>
-      <button class="detail-ep-eye" title="${watched ? t('series.markUnwatched') : t('series.markWatched')}">${ICONS.eye}</button>
+      ${key === nextKey ? `<span class="detail-ep-tag">${esc(t('detail.nextUp'))}</span>` : ''}
+      ${started ? `<span class="detail-ep-tag detail-ep-tag-muted">${esc(t('status.inProgress'))}</span>` : ''}
+      <button class="detail-ep-mark detail-ep-dl${downloaded ? ' on' : ''}" title="${esc(t(downloaded ? 'series.markNotDownloaded' : 'series.markDownloaded'))}" aria-pressed="${downloaded}">${ICONS.download}</button>
+      <button class="detail-ep-mark detail-ep-eye${watched ? ' on' : ''}" title="${esc(t(watched ? 'series.markUnwatched' : 'series.markWatched'))}" aria-pressed="${watched}">${ICONS.eye}</button>
     `;
     row.addEventListener('click', e => {
-      if (e.target.closest('.detail-ep-eye')) return;
+      if (e.target.closest('.detail-ep-mark')) return;
       selectDetailEpisode(item, ep, row);
     });
     row.querySelector('.detail-ep-eye').addEventListener('click', async e => {
       e.stopPropagation();
-      const nw = !detailProgress[key];
-      try { await window.api.seriesMarkWatched(item.imdbId, ep.season, ep.number, nw); } catch {}
-      if (nw) detailProgress[key] = true; else delete detailProgress[key];
-      row.classList.toggle('ep-watched', nw);
+      await toggleMark(item, 'watched', [key], !detailMarks.watched[key]);
+      renderDetailEpisodeList(item, eps, detailSelectedEp ? epKey(detailSelectedEp.season, detailSelectedEp.number) : key);
+    });
+    row.querySelector('.detail-ep-dl').addEventListener('click', async e => {
+      e.stopPropagation();
+      await toggleMark(item, 'downloaded', [key], !detailMarks.downloaded[key]);
+      renderDetailEpisodeList(item, eps, detailSelectedEp ? epKey(detailSelectedEp.season, detailSelectedEp.number) : key);
     });
     epList.appendChild(row);
+    if (key === selectKey) toSelect = [ep, row];
   }
-  const first = epList.querySelector('.detail-ep-row');
-  if (first) selectDetailEpisode(item, eps[0], first);
+  if (!toSelect) {
+    const first = epList.querySelector('.detail-ep-row');
+    if (first) toSelect = [eps[0], first];
+  }
+  if (toSelect) selectDetailEpisode(item, toSelect[0], toSelect[1]);
 }
 
 function selectDetailEpisode(item, ep, row) {
   detailSelectedEp = ep;
   document.querySelectorAll('.detail-ep-row.selected').forEach(r => r.classList.remove('selected'));
   row.classList.add('selected');
-  const info = document.getElementById('detail-epinfo');
+  const key = epKey(ep.season, ep.number);
+  const watched = !!detailMarks.watched[key];
+  const downloaded = !!detailMarks.downloaded[key];
+  const src = detailMarks.sources[key];
   const aired = ep.airstamp ? fmtDate(ep.airstamp) : '';
+  const isOut = !ep.airstamp || Date.parse(ep.airstamp) <= Date.now();
+  const chips = [
+    watched ? `<span class="lib-chip lib-chip-watched">${ICONS.check}<span>${esc(t('status.watched'))}</span></span>` : '',
+    downloaded ? `<span class="lib-chip">${ICONS.download}<span>${esc(t('status.downloaded'))}</span></span>` : '',
+  ].join('');
+
+  // Downloaded with a known torrent → Play it. Otherwise stream now, or download for later.
+  let buttons = '';
+  if (src) buttons += `<button class="epinfo-play btn-pt">${ICONS.play}<span>${esc(t('detail.play'))}</span></button>`;
+  if (isOut) {
+    buttons += `<button class="epinfo-watch ${src ? 'btn-secondary' : 'btn-pt'}">${t('detail.watchNow')}</button>`;
+    if (!downloaded && !src) buttons += `<button class="epinfo-download btn-secondary">${ICONS.download}<span>${esc(t('detail.download'))}</span></button>`;
+  }
+
+  const info = document.getElementById('detail-epinfo');
   info.innerHTML = `
     <div class="epinfo-title">${esc(ep.name || `Episode ${ep.number}`)}</div>
     <div class="epinfo-sub">${esc(t('detail.seasonEp', { s: ep.season, e: ep.number }))}</div>
     ${aired ? `<div class="epinfo-aired">${esc(t('detail.aired', { date: aired }))}</div>` : ''}
+    ${chips ? `<div class="lib-chips epinfo-chips">${chips}</div>` : ''}
     ${ep.summary ? `<p class="epinfo-summary">${esc(ep.summary)}</p>` : ''}
-    <div class="epinfo-footer">
-      <button class="epinfo-watch btn-pt">${t('detail.watchNow')}</button>
-    </div>
+    <div class="epinfo-footer">${buttons}</div>
   `;
-  info.querySelector('.epinfo-watch').addEventListener('click', () => watchEpisode(item, ep));
+  const ctx = episodeCtxFor(item, ep);
+  const meta = { title: episodeLabel(item, ep), poster: item.posterUrl || item.poster || null };
+  info.querySelector('.epinfo-play')?.addEventListener('click', () => playSource(src, ctx, meta));
+  info.querySelector('.epinfo-watch')?.addEventListener('click', () => watchEpisode(item, ep));
+  info.querySelector('.epinfo-download')?.addEventListener('click', e => downloadEpisode(item, ep, e.currentTarget));
+}
+
+function episodeCtxFor(item, ep) {
+  return { id: item.imdbId, type: 'series', season: ep.season, episode: ep.number, title: item.title, poster: plainPoster(item) };
+}
+
+function episodeLabel(item, ep) {
+  return `${item.title} — ${t('detail.seasonEp', { s: ep.season, e: ep.number })}${ep.name ? ` — ${ep.name}` : ''}`;
+}
+
+// Torrent contexts are saved in session.json: keep base64 posters (Library) out of them.
+function plainPoster(item) {
+  const p = item.posterUrl || item.poster || null;
+  return typeof p === 'string' && !p.startsWith('data:') ? p : null;
+}
+
+// Play something already downloaded: the active torrent directly when it's the same file,
+// otherwise re-add its magnet (existing data is verified, not downloaded again).
+function playSource(src, ctx, meta) {
+  const tr = torrents.find(x => x.id === src.id && !x.verifying);
+  const sameFile = tr && (ctx.type === 'movie'
+    || (tr.episodeContext?.season === ctx.season && tr.episodeContext?.episode === ctx.episode));
+  if (sameFile) { play(tr.id); return; }
+  watchNow(src.magnet, ctx, meta);
+}
+
+// Queue the best stream of an episode for download, without playing it.
+async function downloadEpisode(item, ep, btn) {
+  if (btn) btn.disabled = true;
+  try {
+    const streams = await window.api.torrentioStreams(item.imdbId, 'series', ep.season, ep.number);
+    const best = autoPick(streams, settings.preferredQuality || 'best');
+    if (!best) { toast(t('torrentio.noStreams'), true); return; }
+    await doAdd(best.magnet, null, episodeCtxFor(item, ep));
+  } catch { toast(t('status.networkError'), true); }
+  finally { if (btn) btn.disabled = false; }
+}
+
+// --- Movie page: watched / downloaded checks + Play ---
+
+async function loadMovieMarks(item) {
+  let state = null;
+  try { state = await window.api.seriesProgress(item.imdbId); } catch {}
+  if (detailItem !== item) return;
+  setDetailMarks(item, state);
+  renderMovieStatus(item);
+}
+
+function renderMovieStatus(item) {
+  const host = document.getElementById('detail-movie-status');
+  const watched = !!detailMarks.watched.movie;
+  const downloaded = !!detailMarks.downloaded.movie;
+  const src = detailMarks.sources.movie;
+  host.innerHTML = `
+    <div class="detail-movie-marks">
+      ${src ? `<button class="epinfo-play btn-pt">${ICONS.play}<span>${esc(t('detail.play'))}</span></button>` : ''}
+      <button class="detail-mark-toggle${watched ? ' on' : ''}" data-field="watched" aria-pressed="${watched}">${ICONS.eye}<span>${esc(t('status.watched'))}</span></button>
+      <button class="detail-mark-toggle${downloaded ? ' on' : ''}" data-field="downloaded" aria-pressed="${downloaded}">${ICONS.download}<span>${esc(t('status.downloaded'))}</span></button>
+    </div>`;
+  host.querySelector('.epinfo-play')?.addEventListener('click', () => playSource(src,
+    { id: item.imdbId, type: 'movie', season: null, episode: null, title: item.title, poster: plainPoster(item) },
+    { title: item.title, poster: item.posterUrl || item.poster || null }));
+  host.querySelectorAll('.detail-mark-toggle').forEach(b => b.addEventListener('click', async () => {
+    const field = b.dataset.field;
+    await toggleMark(item, field, ['movie'], !detailMarks[field].movie);
+    renderMovieStatus(item);
+  }));
 }
 
 async function watchEpisode(item, ep) {
@@ -414,9 +588,7 @@ async function watchEpisode(item, ep) {
     const streams = await window.api.torrentioStreams(item.imdbId, 'series', ep.season, ep.number);
     const best = autoPick(streams, settings.preferredQuality || 'best');
     if (!best) { toast(t('torrentio.noStreams'), true); return; }
-    const ctx = { id: item.imdbId, type: 'series', season: ep.season, episode: ep.number, title: item.title, poster: item.posterUrl || item.poster || null };
-    const label = `${item.title} — ${t('detail.seasonEp', { s: ep.season, e: ep.number })}${ep.name ? ` — ${ep.name}` : ''}`;
-    watchNow(best.magnet, ctx, { title: label, poster: item.posterUrl || item.poster || null });
+    watchNow(best.magnet, episodeCtxFor(item, ep), { title: episodeLabel(item, ep), poster: item.posterUrl || item.poster || null });
   } catch { toast(t('status.networkError'), true); }
   finally { if (btn) { btn.disabled = false; btn.textContent = t('detail.watchNow'); } }
 }
@@ -496,15 +668,16 @@ async function attachFollowButton(host, { imdbId, title, poster }) {
   });
 }
 
-// Build the episode context passed to doAdd → enables "auto-play next episode".
-// Returns null for movies (nothing to chain).
+// Build the context passed to doAdd: episode identity (→ "auto-play next episode", right
+// file of a season pack, Library "downloaded" mark) or, for an IMDb movie, its identity only.
 function episodeCtx(id, type, season, episode, item) {
-  if (type === 'movie' || episode == null) return null;
-  return {
-    id, type, season, episode,
-    title: item?.title || null,
-    poster: item?.poster || item?.posterUrl || null,
-  };
+  const title = item?.title || null;
+  const poster = item ? plainPoster(item) : null;
+  if (type === 'movie') {
+    return /^tt\d+$/.test(id || '') ? { id, type: 'movie', season: null, episode: null, title, poster } : null;
+  }
+  if (episode == null) return null;
+  return { id, type, season, episode, title, poster };
 }
 
 async function fetchAndRenderDetailStreams(id, type, season, episode, item = null) {

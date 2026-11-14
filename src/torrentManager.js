@@ -10,7 +10,7 @@ import fs from 'fs';
 import crypto from 'crypto';
 import { client, active, rt, tuning, verifying } from './runtime.js';
 import { getSettings } from './settings.js';
-import { persistWatchProgress } from './watchProgress.js';
+import { persistWatchProgress, recordFileDone, recordDoneFiles } from './watchProgress.js';
 import { pipeTranscoded } from './transcode.js';
 
 const VIDEO_EXTENSIONS    = ['.mp4', '.mkv', '.avi', '.mov', '.webm', '.m4v', '.ts', '.flv'];
@@ -388,6 +388,9 @@ export function addTorrentInternal(torrentId, magnet, downloadDir, resumePos = n
       if (episodeContext && episodeContext.season != null && episodeContext.episode != null) {
         const match = videoFiles.find(vf => matchesEpisode(vf.name, episodeContext.season, episodeContext.episode));
         if (match) { selectedIndex = match.index; episodeMatched = true; }
+      } else if (episodeContext?.type === 'movie') {
+        // A movie torrent may carry samples/extras: stream the main (largest) file.
+        selectedIndex = videoFiles[0].index;   // videoFiles is sorted by size, largest first
       }
       const file = torrent.files[selectedIndex];
       const subtitle = findSubtitle(torrent.files, file);
@@ -479,6 +482,14 @@ export function addTorrentInternal(torrentId, magnet, downloadDir, resumePos = n
             downloadAll,
           });
           saveSession();
+
+          // Library: each video file that completes is marked "downloaded" (season packs
+          // finish episode by episode). Files already complete on disk count at once.
+          const libEntry = active.get(torrent.infoHash);
+          for (const f of torrent.files) {
+            if (isVideo(f.name) && !f.done) f.once('done', () => recordFileDone(libEntry, f));
+          }
+          recordDoneFiles(libEntry);
 
           torrent.once('done', () => {
             if (Notification.isSupported()) {

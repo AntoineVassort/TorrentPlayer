@@ -78,12 +78,15 @@ function createLibCard(item, onRemove) {
     : `<div class="lib-no-poster"></div>`;
 
   const ratingBadge = item.rating ? `<div class="lib-rating">★ ${esc(String(item.rating))}</div>` : '';
-  const activeBadge = item.type === 'active' ? `<div class="lib-active-badge">✓</div>` : '';
   const yearLine    = item.year ? `<div class="lib-info-year">${esc(String(item.year))}</div>` : '';
 
   const frac = watchFraction(item);
-  const watchedItem = item.watched || frac >= 0.85;
-  const watchedBadge = watchedItem ? `<div class="lib-watched-badge">✓</div>` : '';
+  const watchedItem = item._watched ?? (item.watched || frac >= 0.85);
+  const downloadedItem = item._downloaded ?? (item.completed || item.type === 'active');
+  const chips = (watchedItem || downloadedItem) ? `<div class="lib-chips">
+      ${watchedItem ? `<span class="lib-chip lib-chip-watched">${ICONS.check}<span>${esc(t('status.watched'))}</span></span>` : ''}
+      ${downloadedItem ? `<span class="lib-chip">${ICONS.download}<span>${esc(t('status.downloaded'))}</span></span>` : ''}
+    </div>` : '';
   const progressBar = frac > 0.01 && !watchedItem
     ? `<div class="lib-progress"><div class="lib-progress-fill" style="width:${(frac * 100).toFixed(1)}%"></div></div>`
     : '';
@@ -103,12 +106,11 @@ function createLibCard(item, onRemove) {
   card.innerHTML = `
     ${posterHTML}
     ${ratingBadge}
-    ${activeBadge}
-    ${watchedBadge}
     ${progressBar}
     <div class="lib-info">
       <div class="lib-info-title">${esc(item.title || item.name)}</div>
       ${yearLine}
+      ${chips}
     </div>
     <div class="lib-overlay">
       <div class="lib-overlay-actions">
@@ -133,15 +135,31 @@ function createLibCard(item, onRemove) {
     resumeOrRedl?.addEventListener('click', e => {
       e.stopPropagation();
       const resume = isResumable(item) ? item.resumePos : null;
-      doAdd(item.magnet, resume);
+      doAdd(item.magnet, resume, libraryContext(item));
       closeHistory();
       toast(t('toast.added', { name: item.name }));
     });
     card.querySelector('.btn-lib-remove').addEventListener('click', async e => {
       e.stopPropagation();
-      await window.api.removeHistory(item.id);
+      if (item.type === 'mark') {
+        // Known only through manual checks: removing it clears them.
+        try {
+          await window.api.libraryMark(item.imdbId, 'watched', ['movie'], false);
+          await window.api.libraryMark(item.imdbId, 'downloaded', ['movie'], false);
+        } catch (err) { toast(friendlyError(err), true); return; }
+      } else {
+        await window.api.removeHistory(item.id);
+      }
       onRemove(card);
     });
+  }
+
+  // A recognised movie opens its page (watched / downloaded checks, play, sources).
+  if (item.imdbId && item.kind !== 'series' && !isSeries(item.name)) {
+    card.addEventListener('click', () => openDetailView({
+      imdbId: item.imdbId, title: item.title || item.name, posterUrl: item.poster || null,
+      year: item.year || null, rating: item.rating || null, type: 'movie',
+    }, 'history'));
   }
 
   if (!item.poster && item.type === 'history') {
@@ -174,130 +192,177 @@ function createLibCard(item, onRemove) {
   return card;
 }
 
-async function renderHistory() {
-  const grid = document.getElementById('library-grid');
-  const empty = document.getElementById('history-empty');
-  const continueSection = document.getElementById('continue-section');
-  const continueGrid = document.getElementById('continue-grid');
-  grid.textContent = '';
-  continueGrid.textContent = '';
-
-  renderFollows();
-
-  let history = [];
-  try { history = await window.api.getHistory(); } catch {}
-
-  const activeDone = torrents.filter(t => t.done);
-  let items = [
-    ...activeDone.map(t => ({
-      type: 'active', id: t.id,
-      poster: t.meta?.poster || null,
-      title: t.meta?.title || t.name,
-      year: t.meta?.year || null,
-      rating: t.meta?.rating || null,
-      name: t.name,
-      watchedAt: null,
-      resumePos: t.resumePos || null,
-      resumeDuration: t.resumeDuration || null,
-    })),
-    ...history.map(e => ({ type: 'history', ...e })),
-  ];
-
-  if (libTypeFilter === 'movies') items = items.filter(i => !isSeries(i.name));
-  else if (libTypeFilter === 'series') items = items.filter(i => isSeries(i.name));
-
-  if (libSort === 'title') {
-    items.sort((a, b) => (a.title || a.name).localeCompare(b.title || b.name));
-  } else if (libSort === 'rating') {
-    items.sort((a, b) => (b.rating || 0) - (a.rating || 0));
-  }
-
-  empty.classList.toggle('hidden', items.length > 0);
-
-  // Continue Watching shelf — resumable items (deduped by id)
-  const continueItems = items.filter(isResumable);
-  continueSection.classList.toggle('hidden', continueItems.length === 0);
-  document.getElementById('lib-all-title').classList.toggle('hidden', items.length === 0);
-
-  const onRemove = (card) => {
-    card.remove();
-    if (!grid.children.length) empty.classList.remove('hidden');
+// Torrent-start context for a Library item, so a re-download keeps its series / episode /
+// movie identity (next-episode offer, "downloaded" mark, right file of a season pack).
+function libraryContext(item) {
+  if (!item.imdbId) return null;
+  const movie = item.kind === 'movie' || (!item.kind && !isSeries(item.name));
+  const poster = typeof item.poster === 'string' && !item.poster.startsWith('data:') ? item.poster : null;
+  return {
+    id: item.imdbId, type: movie ? 'movie' : 'series',
+    season: movie ? null : (item.season ?? null), episode: movie ? null : (item.episode ?? null),
+    title: item.title || null, poster,
   };
-
-  for (const item of continueItems) {
-    continueGrid.appendChild(createLibCard(item, () => renderHistory()));
-  }
-  for (const item of items) {
-    grid.appendChild(createLibCard(item, onRemove));
-  }
 }
 
-// --- Followed series shelf ---
+let libRenderSeq = 0;   // drops the result of an older render that finished late
 
-async function renderFollows() {
-  const section = document.getElementById('follows-section');
-  const grid = document.getElementById('follows-grid');
-  grid.textContent = '';
-  let follows = [];
-  try { follows = await window.api.followList(); } catch {}
-  section.classList.toggle('hidden', follows.length === 0);
-  for (const f of follows) grid.appendChild(createFollowCard(f));
+// Library: "Continue" shelf, then one card per series, one per movie, and the torrents the
+// app could not identify. Rebuilt on open and whenever the main process says it changed.
+async function renderHistory() {
+  const seq = ++libRenderSeq;
+  let lib = null, follows = [];
+  try {
+    [lib, follows] = await Promise.all([window.api.libraryGet(), window.api.followList().catch(() => [])]);
+  } catch {}
+  if (seq !== libRenderSeq) return;
+  lib = lib || { history: [], watched: {}, downloaded: {}, inProgress: {}, sources: {}, titles: {} };
+
+  // History records, with finished active torrents merged in (same id = same torrent).
+  const byId = new Map();
+  for (const e of lib.history || []) byId.set(e.id, { type: 'history', ...e });
+  for (const tr of torrents.filter(x => x.done)) {
+    const prev = byId.get(tr.id) || {};
+    const ctx = tr.episodeContext;
+    byId.set(tr.id, {
+      ...prev, type: 'active', id: tr.id, name: tr.name,
+      poster: prev.poster || tr.meta?.poster || null,
+      title: prev.title || tr.meta?.title || tr.name,
+      year: prev.year || tr.meta?.year || null,
+      rating: prev.rating || tr.meta?.rating || null,
+      imdbId: prev.imdbId || ctx?.id || tr.meta?.imdbId || null,
+      kind: prev.kind || (ctx ? (ctx.type === 'movie' ? 'movie' : 'series') : tr.meta?.kind) || null,
+      resumePos: tr.resumePos || prev.resumePos || null,
+      resumeDuration: tr.resumeDuration || prev.resumeDuration || null,
+      completed: true,
+    });
+  }
+  const items = [...byId.values()];
+  const titles = lib.titles || {};
+
+  const seriesMap = new Map();
+  const group = (id) => {
+    if (!seriesMap.has(id)) seriesMap.set(id, { imdbId: id, title: null, poster: null, year: null, rating: null, last: 0, following: false });
+    return seriesMap.get(id);
+  };
+  const movies = [], others = [];
+  const now = Date.now();
+  for (const it of items) {
+    const ser = it.kind === 'series' || (it.kind !== 'movie' && isSeries(it.name));
+    if (ser && it.imdbId) {
+      const g = group(it.imdbId);
+      g.title ||= it.title || null;
+      g.poster ||= it.poster || null;
+      g.year ||= it.year || null;
+      g.rating ||= it.rating || null;
+      g.last = Math.max(g.last, it.watchedAt ? Date.parse(it.watchedAt) || 0 : now);
+    } else if (ser) {
+      others.push(it);
+    } else {
+      it._watched = !!(it.watched || watchFraction(it) >= 0.85 || (it.imdbId && lib.watched[it.imdbId]?.movie));
+      it._downloaded = !!(it.completed || it.type === 'active' || (it.imdbId && lib.downloaded[it.imdbId]?.movie));
+      movies.push(it);
+    }
+  }
+
+  // Titles known only through manual checks, the episode cache or a follow.
+  const markedIds = new Set([...Object.keys(lib.watched || {}), ...Object.keys(lib.downloaded || {})]);
+  const movieIds = new Set(movies.map(m => m.imdbId).filter(Boolean));
+  for (const id of markedIds) {
+    const keys = [...Object.keys(lib.watched[id] || {}), ...Object.keys(lib.downloaded[id] || {})];
+    const info = titles[id] || {};
+    if (keys.some(k => k !== 'movie')) {
+      group(id);
+    } else if (!movieIds.has(id) && info.title) {
+      movies.push({
+        type: 'mark', id: `mark:${id}`, imdbId: id, kind: 'movie', name: info.title, title: info.title,
+        poster: info.poster || null, _watched: !!lib.watched[id]?.movie, _downloaded: !!lib.downloaded[id]?.movie,
+      });
+    }
+  }
+  for (const f of follows || []) {
+    const g = group(f.imdbId);
+    g.following = true;
+    g.title ||= f.title;
+    g.poster ||= f.poster || null;
+  }
+  const seriesGroups = [...seriesMap.values()].filter(g => {
+    const info = titles[g.imdbId] || {};
+    g.title ||= info.title || null;
+    g.poster ||= info.poster || null;
+    g.status = seriesStatus(info.episodes, lib.watched[g.imdbId], lib.downloaded[g.imdbId]);
+    g.tvmazeId = info.tvmazeId || null;
+    return !!g.title;
+  });
+
+  // Filters / sort (Recent = last activity, then title / rating).
+  const showSeries = libTypeFilter !== 'movies';
+  const showMovies = libTypeFilter !== 'series';
+  const byTitle = (a, b) => (a.title || a.name || '').localeCompare(b.title || b.name || '');
+  const byRating = (a, b) => (Number(b.rating) || 0) - (Number(a.rating) || 0);
+  if (libSort === 'title') { seriesGroups.sort(byTitle); movies.sort(byTitle); others.sort(byTitle); }
+  else if (libSort === 'rating') { seriesGroups.sort(byRating); movies.sort(byRating); }
+  else seriesGroups.sort((a, b) => b.last - a.last);
+
+  const fill = (sectionId, gridId, list, make) => {
+    const grid = document.getElementById(gridId);
+    grid.textContent = '';
+    for (const x of list) grid.appendChild(make(x));
+    document.getElementById(sectionId).classList.toggle('hidden', !list.length);
+  };
+  const rerender = () => renderHistory();
+  const continueItems = items.filter(isResumable);
+  fill('continue-section', 'continue-grid', continueItems, it => createLibCard(it, rerender));
+  fill('lib-series-section', 'lib-series-grid', showSeries ? seriesGroups : [], createSeriesCard);
+  fill('lib-movies-section', 'lib-movies-grid', showMovies ? movies : [], it => createLibCard(it, rerender));
+  fill('lib-other-section', 'library-grid', showSeries ? others : [], it => createLibCard(it, rerender));
+
+  const total = continueItems.length + seriesGroups.length + movies.length + others.length;
+  document.getElementById('history-empty').classList.toggle('hidden', total > 0);
 }
 
-function createFollowCard(f) {
+// One card per series: progress "x/y watched" and where the next episode stands.
+function createSeriesCard(g) {
   const card = document.createElement('div');
-  card.className = 'follow-card';
-
-  const posterHTML = f.poster
-    ? `<img class="lib-poster" src="${esc(f.poster)}" alt="">`
+  card.className = 'lib-card lib-series-card';
+  const st = g.status;
+  const posterHTML = g.poster
+    ? `<img class="lib-poster" src="${esc(g.poster)}" alt="">`
     : `<div class="lib-no-poster"></div>`;
 
-  let statusHTML;
-  if (f.pendingEpisode) {
-    statusHTML = `<div class="follow-new">${t('follow.newEpisode', { label: esc(f.pendingEpisode.label) })}</div>`;
-  } else if (f.nextAir) {
-    const when = f.nextAir.airstamp ? fmtDate(f.nextAir.airstamp) : '';
-    statusHTML = `<div class="follow-next">${t('follow.next', { label: esc(`S${f.nextAir.season}E${f.nextAir.number}`), date: esc(when) })}</div>`;
-  } else {
-    statusHTML = `<div class="follow-next">${t('follow.noUpcoming')}</div>`;
+  let badge = '';
+  if (st.next && st.state === 'available') {
+    badge = `<div class="lib-next lib-next-new">${esc(t('lib.nextNew', { ep: epLabel(st.next.season, st.next.number) }))}</div>`;
+  } else if (st.next && st.state === 'ready') {
+    badge = `<div class="lib-next lib-next-ready">${esc(t('lib.nextReady', { ep: epLabel(st.next.season, st.next.number) }))}</div>`;
+  } else if (st.state === 'done') {
+    badge = `<div class="lib-next lib-next-done">${esc(t('lib.upToDate'))}</div>`;
   }
-
-  const grabBtn = f.pendingEpisode ? `<button class="btn-lib-play follow-grab">${t('follow.grab')}</button>` : '';
+  const count = st.airedCount
+    ? t('lib.watchedOf', { n: st.watchedCount, total: st.airedCount })
+    : (st.watchedCount ? t('lib.watchedN', { n: st.watchedCount }) : '');
+  const frac = st.airedCount ? st.watchedCount / st.airedCount : 0;
+  const bar = frac > 0
+    ? `<div class="lib-progress"><div class="lib-progress-fill lib-progress-series" style="width:${(Math.min(frac, 1) * 100).toFixed(1)}%"></div></div>`
+    : '';
 
   card.innerHTML = `
-    <div class="follow-poster-wrap">
-      ${posterHTML}
-      <div class="lib-overlay">
-        <div class="lib-overlay-actions">
-          ${grabBtn}
-          <button class="btn-lib-remove">✕</button>
-        </div>
-      </div>
-    </div>
-    <div class="follow-caption">
-      <div class="follow-card-title">${esc(f.title)}</div>
-      ${statusHTML}
+    ${posterHTML}
+    ${g.following ? `<div class="lib-follow-star" title="${esc(t('follow.remove'))}">★</div>` : ''}
+    ${badge}
+    ${bar}
+    <div class="lib-info">
+      <div class="lib-info-title">${esc(g.title)}</div>
+      ${count ? `<div class="lib-info-year">${esc(count)}</div>` : ''}
     </div>
   `;
-
-  card.querySelector('.follow-poster-wrap').addEventListener('click', () => openSeriesView(f));
-
-  card.querySelector('.follow-grab')?.addEventListener('click', async e => {
-    e.stopPropagation();
-    try {
-      const r = await window.api.followGrab(f.imdbId);
-      toast(t('toast.added', { name: r.name }));
-      renderFollows();
-    } catch (err) { toast(friendlyError(err), true); }
-  });
-  card.querySelector('.btn-lib-remove').addEventListener('click', async e => {
-    e.stopPropagation();
-    await window.api.followRemove(f.imdbId);
-    renderFollows();
-  });
-
+  card.addEventListener('click', () => openDetailView({
+    imdbId: g.imdbId, tvmazeId: g.tvmazeId, title: g.title, posterUrl: g.poster,
+    year: g.year, rating: g.rating, type: 'series',
+  }, 'history'));
   return card;
 }
+
 
 // --- Series episode view ---
 

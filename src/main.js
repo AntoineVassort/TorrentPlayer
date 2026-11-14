@@ -14,7 +14,7 @@ import {
   applyQueueRules, addTorrentInternal, deleteTorrentFiles, isReadyToPlay, slideWindow, slidePack,
 } from './torrentManager.js';
 import { registerPlaybackIpc } from './playback.js';
-import { checkFollows } from './watchProgress.js';
+import { checkFollows, refreshLibrarySeries } from './watchProgress.js';
 import { startPerfLog } from './perfLog.js';
 import { registerAppIpc, safeOpenExternal } from './ipcHandlers.js';
 
@@ -237,6 +237,10 @@ app.whenReady().then(async () => {
   // Followed-series new-episode poll: once shortly after launch, then every 6 h.
   setTimeout(() => { checkFollows().catch(() => {}); }, 20000);
   setInterval(() => { checkFollows().catch(() => {}); }, 6 * 60 * 60 * 1000);
+  // Library series (watched / downloaded ones, followed or not): refresh episode lists so the
+  // Library knows when a next episode is out. Each series is re-fetched at most every 6 h.
+  setTimeout(() => { refreshLibrarySeries().catch(() => {}); }, 30000);
+  setInterval(() => { refreshLibrarySeries().catch(() => {}); }, 60 * 60 * 1000);
 
   // Restore session
   rt.mainWindow.webContents.once('did-finish-load', async () => {

@@ -19,7 +19,45 @@ const ICONS = {
   lock: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>`,
   film: `<svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 3v18M17 3v18M3 8h4M3 16h4M17 8h4M17 16h4"/></svg>`,
   eye: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>`,
+  download: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>`,
+  check: `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>`,
+  play: `<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4v16l13-8z"/></svg>`,
 };
+
+// --- Library marks (shared by the Library grid and the title page) ---
+
+function epKey(season, number) { return `${season}:${number}`; }
+
+// Where a series stands: the episode after the last watched one, and whether it is out,
+// already downloaded, or still to come. Specials (season 0) are ignored.
+// state: 'ready' (downloaded, not watched) | 'available' (aired) | 'upcoming' | 'done' | 'unknown'
+function seriesStatus(episodes, watched = {}, downloaded = {}) {
+  const eps = (episodes || []).filter(e => e.season > 0)
+    .sort((a, b) => a.season - b.season || a.number - b.number);
+  const now = Date.now();
+  const isAired = e => !!e.airstamp && Date.parse(e.airstamp) <= now;
+  const aired = eps.filter(isAired);
+  const watchedCount = aired.filter(e => watched[epKey(e.season, e.number)]).length;
+  if (!eps.length) {
+    return { next: null, state: 'unknown', watchedCount: Object.keys(watched).length, airedCount: 0 };
+  }
+  let last = -1;
+  eps.forEach((e, i) => { if (watched[epKey(e.season, e.number)]) last = i; });
+  // Nothing watched yet: start at the first downloaded episode (e.g. only S03 is on disk).
+  if (last < 0) last = eps.findIndex(e => downloaded[epKey(e.season, e.number)]) - 1;
+  if (last < -1) last = -1;
+  const next = eps.slice(last + 1).find(e => !watched[epKey(e.season, e.number)]) || null;
+  let state = 'done';
+  if (next) {
+    if (downloaded[epKey(next.season, next.number)]) state = 'ready';
+    else state = isAired(next) ? 'available' : 'upcoming';
+  }
+  return { next, state, watchedCount, airedCount: aired.length };
+}
+
+function epLabel(season, number) {
+  return `S${String(season).padStart(2, '0')}E${String(number).padStart(2, '0')}`;
+}
 
 // --- Init ---
 

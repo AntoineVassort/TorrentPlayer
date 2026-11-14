@@ -13,10 +13,14 @@ export function loadHistory(userData) {
   catch { return []; }
 }
 
+// Upsert + move to the front. Fields absent from `entry` are kept from the previous
+// record (poster, identity…), and `completed` never goes back to false.
 export function addEntry(userData, entry) {
   const history = loadHistory(userData);
+  const prev = history.find(e => e.id === entry.id);
   const filtered = history.filter(e => e.id !== entry.id);
-  const updated = [entry, ...filtered].slice(0, MAX_ENTRIES);
+  const merged = prev ? { ...prev, ...entry, completed: !!(prev.completed || entry.completed) } : entry;
+  const updated = [merged, ...filtered].slice(0, MAX_ENTRIES);
   fs.writeFileSync(historyPath(userData), JSON.stringify(updated, null, 2));
 }
 
