@@ -3,6 +3,15 @@
 All notable changes to TorrentPlayer are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.16.1] - 2026-11-14
+
+### Changed
+- Starting or playing an episode checks every earlier episode as watched (earlier seasons included). An episode unchecked by hand stays unchecked until a later episode is reached.
+
+### Fixed
+- Episodes watched before 1.16 now join their series card in the Library instead of showing one card per episode: the series is read from the file name (the title stored back then was often wrong), and those episodes count as watched.
+- Coming back to the Library from a title page no longer makes every poster blink: only the cards that changed are redrawn.
+
 ## [1.16.0] - 2026-11-14
 
 ### Added
@@ -209,6 +218,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 ### Added
 - Library view, multi-source search, filters and auto-update.
 
+[1.16.1]: https://github.com/AntoineVassort/TorrentPlayer/compare/v1.16.0...v1.16.1
 [1.16.0]: https://github.com/AntoineVassort/TorrentPlayer/compare/v1.15.0...v1.16.0
 [1.15.0]: https://github.com/AntoineVassort/TorrentPlayer/compare/v1.14.1...v1.15.0
 [1.14.1]: https://github.com/AntoineVassort/TorrentPlayer/compare/v1.14.0...v1.14.1
