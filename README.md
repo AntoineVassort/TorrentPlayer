@@ -33,7 +33,7 @@ The interface is **inspired by Popcorn Time** — a poster wall you browse by Mo
     </td>
     <td width="50%" valign="top">
       <a href="docs/screenshots/library.webp"><img src="docs/screenshots/library.webp" alt="Library with followed series and Continue Watching"></a>
-      <br><sub><b>Library</b> — followed series, Continue Watching with resume progress, and everything you've watched. <i>Screenshots use generated demo artwork.</i></sub>
+      <br><sub><b>Library</b> — Continue Watching with resume progress, then your series and movies. <i>Screenshots use generated demo artwork.</i></sub>
     </td>
   </tr>
   <tr>
@@ -77,14 +77,14 @@ The interface is **inspired by Popcorn Time** — a poster wall you browse by Mo
 - **Stream while downloading** — playback starts before the download completes
 - **Continue Watching** — resume where you left off; the library shows a progress bar and a one-click resume
 - **Auto-play next episode** — when an episode ends, the next one is fetched and played automatically (toggle in Settings)
-- **Follow series** — ★ follow a series to get notified when a new episode airs; download it in one click, or auto-download (opt-in). Followed shows and their next air date appear in the Library
-- **Episode view & watched markers** — browse a followed series season-by-season, with a ✓ on episodes (and library items) you've already watched
+- **Follow series** — ★ follow a series to get notified when a new episode airs; download it in one click, or auto-download (opt-in)
+- **Watched & downloaded checks** — every episode and movie shows whether it was watched and downloaded (recorded automatically, kept even if the file is deleted); check them by hand — one episode or a whole season — for what you watched or downloaded elsewhere
 - **Quality auto-pick** — set a preferred quality (4K / 1080p / 720p / 480p) and the best matching stream is added automatically, skipping the stream list
 - **Resume position** — saved and restored for both mpv (IPC) and VLC (HTTP interface)
 - **Subtitles** — uses `.srt` / `.ass` / `.ssa` / `.vtt` / `.sub` files shipped in the torrent, and can auto-fetch from OpenSubtitles when none are present
 - **Smart queue** — download one at a time, drag to reorder
 - **Stuck-download recovery** — when a torrent finds no peers, switch to another release (series/anime) or retry the search in one click; warns when disk space is low
-- **Library** — media grid with posters, ratings and titles for everything you've watched (metadata via Cinemeta, no API key)
+- **Library** — sorted into Continue, Series, Movies and Other. One card per series with "x/y watched" and the next episode's state (up next / new / up to date); clicking a series opens it on that episode, ready to play or download. Every series in the Library is checked for new episodes, and the Library refreshes on its own (metadata via Cinemeta and TVmaze, no API key)
 - **Cast** — stream to Chromecast or DLNA/UPnP devices on your local network. Subtitles (embedded in the MKV, shipped with the torrent, or from OpenSubtitles) are sent as a track you can toggle from the app; audio the receiver can't decode (E-AC-3, AC-3, DTS) is converted to AAC on the fly with a bundled ffmpeg
 - **Network & performance settings** — a dedicated Settings page: max download / upload speed, max connections per torrent, read-ahead window, stop-seeding ratio, and DHT / local discovery / UPnP-NAT-PMP / web seeds / protocol encryption / listening port. Sensible defaults, one-click "restore defaults"
 - **Verification progress** — when a big torrent re-checks its files after a restart, its card shows the real progress ("Verifying files… 42 %") and can be cancelled
