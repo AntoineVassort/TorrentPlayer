@@ -306,8 +306,17 @@ async function renderHistory() {
 
   const fill = (sectionId, gridId, list, make) => {
     const grid = document.getElementById(gridId);
-    grid.textContent = '';
-    for (const x of list) grid.appendChild(make(x));
+    // Keep the cards whose markup did not change: a re-created card reloads its poster, and
+    // every poster blinking at once looked like a double refresh when coming back to the Library.
+    const old = new Map();
+    for (const el of grid.children) {
+      if (!old.has(el.outerHTML)) old.set(el.outerHTML, []);
+      old.get(el.outerHTML).push(el);
+    }
+    grid.replaceChildren(...list.map(x => {
+      const card = make(x);
+      return old.get(card.outerHTML)?.shift() || card;
+    }));
     document.getElementById(sectionId).classList.toggle('hidden', !list.length);
   };
   const rerender = () => renderHistory();
