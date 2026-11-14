@@ -3,6 +3,19 @@
 All notable changes to TorrentPlayer are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.16.0] - 2026-11-14
+
+### Added
+- The Library is sorted into sections: Continue, Series (one card per series with "x/y watched" and the state of the next episode: "Up next", "New", "Up to date"), Movies and Other (torrents the app could not identify).
+- Clicking a series or a movie in the Library opens its page with *Watched* and *Downloaded* checks. On a series page the next episode is highlighted and the page opens on its season; a downloaded episode can be played directly, an aired one streamed or downloaded for later.
+- Episodes and movies can be checked as watched or downloaded by hand (also a whole season at once), for what was watched or downloaded outside the app.
+- Every series in the Library is checked for new episodes, not only followed ones (no automatic download).
+
+### Changed
+- "Downloaded" is now recorded automatically when a video file finishes, including each episode of a season pack, and stays checked even if the file is later deleted.
+- The Library refreshes on its own when an episode is watched, a download finishes or a check changes.
+- Movies started from Discover or search keep their identity (IMDb id), so they get the alternate-stream button and are matched in the Library.
+
 ## [1.15.0] - 2026-11-09
 
 ### Added
@@ -196,6 +209,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 ### Added
 - Library view, multi-source search, filters and auto-update.
 
+[1.16.0]: https://github.com/AntoineVassort/TorrentPlayer/compare/v1.15.0...v1.16.0
 [1.15.0]: https://github.com/AntoineVassort/TorrentPlayer/compare/v1.14.1...v1.15.0
 [1.14.1]: https://github.com/AntoineVassort/TorrentPlayer/compare/v1.14.0...v1.14.1
 [1.14.0]: https://github.com/AntoineVassort/TorrentPlayer/compare/v1.13.0...v1.14.0
