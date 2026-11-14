@@ -22,7 +22,7 @@ import {
 } from './torrentManager.js';
 import {
   grabFollowedEpisode, checkFollows, knownIdentity, libraryIdentity, historyKey,
-  recordDoneFiles, refreshLibrarySeries, notifyLibraryChanged,
+  recordDoneFiles, refreshLibrarySeries, notifyLibraryChanged, markEarlierWatched,
 } from './watchProgress.js';
 import { ensureSubtitle } from './playback.js';
 import { srtToVtt, mkvSubtitleVtt } from './subtitles.js';
@@ -154,6 +154,12 @@ export function registerAppIpc() {
 
     let torrentId = source;
     const magnet = source.startsWith('magnet:') ? source : null;
+
+    // Starting an episode means the earlier ones were watched.
+    if (epCtx && epCtx.type !== 'movie' && epCtx.episode != null) {
+      markEarlierWatched(app.getPath('userData'), epCtx.id, epCtx.season, epCtx.episode)
+        .then(changed => { if (changed) notifyLibraryChanged(); }).catch(() => {});
+    }
 
     // Early duplicate check via infoHash from magnet URI
     if (magnet) {

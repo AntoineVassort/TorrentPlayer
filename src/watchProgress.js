@@ -5,10 +5,10 @@
 import { app, Notification } from 'electron';
 import { active, rt } from './runtime.js';
 import { getSettings } from './settings.js';
-import { addEntry, loadHistory } from './history.js';
+import { addEntry, loadHistory, patchEntries } from './history.js';
 import { markKey, setMarks, getAllMarks, loadTitles, updateTitle } from './series-progress.js';
 import { parseSeasonEpisode } from './subtitles.js';
-import { fetchTorrentioStreams, pickBestTorrentioStream, fetchSeriesEpisodes } from './metadata.js';
+import { fetchTorrentioStreams, pickBestTorrentioStream, fetchSeriesEpisodes, resolveSeries, seriesFromFileName } from './metadata.js';
 import { loadFollows, updateFollow } from './follows.js';
 import { addTorrentInternal, applyQueueRules, saveSession, isVideo } from './torrentManager.js';
 
@@ -120,6 +120,84 @@ export function recordDoneFiles(entry) {
   for (const f of entry.torrent.files) if (f.done && isVideo(f.name)) recordFileDone(entry, f);
 }
 
+// Episodes recorded before v1.16 have no IMDb id, so the Library could not group them under
+// one series card. Their stored title is unreliable (the old matcher often took the episode
+// name), so the series is read from the file name, resolved once per series on Cinemeta, and
+// the identity, the right title and the poster are stored (an episode with no recorded position
+// counts as watched). Movies are left as they are.
+const unresolvedSeries = new Set();   // per session: series names Cinemeta did not match
+async function backfillHistoryIdentity(userData) {
+  const groups = new Map();
+  for (const e of loadHistory(userData)) {
+    if (e.imdbId) continue;
+    const { season, episode } = parseSeasonEpisode(e.name);
+    const show = episode != null && seriesFromFileName(e.name);
+    if (!show || unresolvedSeries.has(show.key)) continue;
+    if (!groups.has(show.key)) groups.set(show.key, { ...show, entries: [] });
+    const g = groups.get(show.key);
+    g.year ||= show.year;
+    // No position recorded (old players didn't report one): it was launched, count it as watched.
+    g.entries.push({ id: e.id, season, episode, title: e.title, watched: !(e.resumePos > 5) || undefined });
+  }
+  const patches = new Map();
+  for (const [key, g] of groups) {
+    let found = null;
+    try { found = await resolveSeries(g.title, g.year); } catch { continue; }   // network: retry later
+    if (!found) { unresolvedSeries.add(key); continue; }
+    updateTitle(userData, found.imdbId, { kind: 'series', title: found.title, poster: found.poster });
+    for (const x of g.entries) {
+      patches.set(x.id, {
+        imdbId: found.imdbId, kind: 'series', season: x.season, episode: x.episode, title: found.title,
+        ...(x.watched ? { watched: true } : {}),
+        // The stored poster belongs to the stored title: drop it when that title was wrong.
+        ...(x.title !== found.title ? { poster: null } : {}),
+      });
+    }
+  }
+  return patches.size ? patchEntries(userData, patches) : false;
+}
+
+// Reaching an episode (started from the app, or recorded in history) means the ones before it
+// were watched: mark every earlier episode, earlier seasons included. Applied once per point
+// (`impliedUpTo` in library-titles.json), so an episode unchecked by hand stays unchecked until
+// the user gets further. Returns true if marks changed.
+const isAfter = (s1, e1, s2, e2) => (s1 ?? 0) > (s2 ?? 0) || ((s1 ?? 0) === (s2 ?? 0) && e1 > e2);
+export async function markEarlierWatched(userData, titleId, season, episode) {
+  if (!titleId || !Number.isInteger(episode)) return false;
+  const cur = loadTitles(userData)[titleId] || {};
+  const prev = cur.impliedUpTo;
+  if (prev && !isAfter(season, episode, prev.season, prev.episode)) return false;
+  let list = cur.episodes;
+  if (!list?.length && /^tt\d+$/.test(titleId)) {
+    const { tvmazeId, episodes } = await fetchSeriesEpisodes(titleId, cur.tvmazeId || null);
+    if (episodes.length) {
+      list = episodes.map(e => ({ season: e.season, number: e.number, name: e.name, airstamp: e.airstamp }));
+      updateTitle(userData, titleId, { kind: 'series', tvmazeId, episodes: list, checkedAt: Date.now() });
+    }
+  }
+  // Without an episode list (anime, network error) only the same season can be inferred.
+  const keys = list?.length
+    ? list.filter(e => e.season > 0 && isAfter(season, episode, e.season, e.number)).map(e => markKey(e.season, e.number))
+    : Array.from({ length: episode - 1 }, (_, i) => markKey(season, i + 1));
+  updateTitle(userData, titleId, { impliedUpTo: { season, episode } });
+  return setMarks(userData, 'watched', titleId, keys, true);
+}
+
+// Furthest episode of each series in history (streamed files only, never a whole season pack).
+async function applyHistoryProgress(userData) {
+  const furthest = new Map();
+  for (const e of loadHistory(userData)) {
+    if (!e.imdbId || e.kind !== 'series' || !Number.isInteger(e.episode)) continue;
+    const f = furthest.get(e.imdbId);
+    if (!f || isAfter(e.season, e.episode, f.season, f.episode)) furthest.set(e.imdbId, { season: e.season, episode: e.episode });
+  }
+  let changed = false;
+  for (const [tid, p] of furthest) {
+    try { if (await markEarlierWatched(userData, tid, p.season, p.episode)) changed = true; } catch {}
+  }
+  return changed;
+}
+
 // Keep a TVmaze episode list for every series in the Library (history, marks, follows), so
 // the Library can show "x/y watched" and whether the next episode is out. Each series is
 // re-fetched at most every 6 h; runs one at a time.
@@ -129,6 +207,7 @@ export async function refreshLibrarySeries({ force = false } = {}) {
   refreshingSeries = true;
   try {
     const userData = app.getPath('userData');
+    let changed = await backfillHistoryIdentity(userData);
     const ids = new Set();
     for (const e of loadHistory(userData)) {
       if (e.imdbId && e.kind === 'series') ids.add(e.imdbId);
@@ -141,7 +220,6 @@ export async function refreshLibrarySeries({ force = false } = {}) {
 
     const titles = loadTitles(userData);
     const now = Date.now();
-    let changed = false;
     for (const tid of ids) {
       if (!/^tt\d+$/.test(tid)) continue;               // TVmaze lookups need an IMDb id
       const cur = titles[tid] || {};
@@ -155,6 +233,7 @@ export async function refreshLibrarySeries({ force = false } = {}) {
       });
       changed = true;
     }
+    if (await applyHistoryProgress(userData)) changed = true;
     if (changed) notifyLibraryChanged();
   } finally {
     refreshingSeries = false;

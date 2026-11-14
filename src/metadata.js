@@ -184,6 +184,33 @@ export async function fetchMetaFromCinemeta(name) {
   };
 }
 
+// Series name of an episode file: what precedes SxxExx ("Sugar.2024.S02E05…" → Sugar, 2024).
+// `key` groups spelling variants ("R.J.Decker" / "RJ Decker"). null if not an episode name.
+export function seriesFromFileName(name) {
+  const m = String(name || '').match(/^(.*?)[\s._\-([]*[Ss]\d{1,2}[\s._-]*[Ee]\d{1,3}/);
+  if (!m) return null;
+  let title = m[1].replace(/[._()[\]]+/g, ' ').replace(/\s+-\s+|\s+-$|^-\s+/g, ' ').replace(/\s+/g, ' ').trim();
+  let year = null;
+  const y = title.match(/^(.+?)\s+(19\d{2}|20\d{2})$/);
+  if (y) { title = y[1]; year = Number(y[2]); }
+  const key = normTitle(title).replace(/ /g, '');
+  return key ? { title, year, key } : null;
+}
+
+// Cinemeta series whose name matches a file's series name (spacing/punctuation aside); the
+// year picks among same-name shows, else the most popular one. Poster as a data URL.
+export async function resolveSeries(title, year) {
+  const res = await fetch(`https://v3-cinemeta.strem.io/catalog/series/top/search=${encodeURIComponent(title)}.json`,
+    { signal: AbortSignal.timeout(6000), headers: { 'User-Agent': 'Mozilla/5.0' } });
+  const data = await res.json();
+  const key = normTitle(title).replace(/ /g, '');
+  const hits = (data.metas || []).filter(m => typeof m.id === 'string' && /^tt\d+$/.test(m.id)
+    && normTitle(m.name).replace(/ /g, '') === key);
+  const best = (year && hits.find(m => parseInt(m.year || m.releaseInfo, 10) === year)) || hits[0];
+  if (!best) return null;
+  return { imdbId: best.id, title: best.name, poster: await fetchImgBase64(best.poster || null).catch(() => null) };
+}
+
 const DEFAULT_TRACKERS = [
   'udp://open.demonii.com:1337/announce',
   'udp://tracker.openbittorrent.com:80/announce',

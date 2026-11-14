@@ -32,6 +32,18 @@ export function updateEntry(userData, id, fields) {
   fs.writeFileSync(historyPath(userData), JSON.stringify(history, null, 2));
 }
 
+// Merge fields into several entries in one write: `patches` maps entry id → fields.
+export function patchEntries(userData, patches) {
+  const history = loadHistory(userData);
+  let changed = false;
+  for (const e of history) {
+    const p = patches.get(e.id);
+    if (p) { Object.assign(e, p); changed = true; }
+  }
+  if (changed) fs.writeFileSync(historyPath(userData), JSON.stringify(history, null, 2));
+  return changed;
+}
+
 export function removeEntry(userData, id) {
   const history = loadHistory(userData);
   fs.writeFileSync(
